@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+ 
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    /* Light Blue Primary */
+    --primary: 199 89% 48%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Card Colors */
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    /* Popover Colors */
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    /* Light Blue Secondary */
+    --secondary: 199 89% 96%;
+    --secondary-foreground: 199 89% 48%;
+
+    /* Muted Colors */
+    --muted: 199 89% 96%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    /* Accent Colors */
+    --accent: 199 89% 96%;
+    --accent-foreground: 199 89% 48%;
+
+    /* Destructive Colors */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    /* Border and Input Colors */
+    --border: 199 89% 90%;
+    --input: 199 89% 90%;
+    --ring: 199 89% 48%;
+
+    --radius: 0.5rem;
+  }
+}
+ 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    padding: 0;
+  }
+}
