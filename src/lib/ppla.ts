@@ -1,82 +1,45 @@
-import { PPLAContentType, PPLARequest, PPLAField } from "@/types";
+import type { PPLARequest, PPLAField } from "@/types"
 
 export function createDefaultPPLARequest(
-    product: {
-        name: string;
-        code: string;
-        price: number;
-    },
-    config?: {
-        width?: number;
-        height?: number;
-        density?: number;
-        gap?: number;
-        copies?: number;
-    }
+  product: {
+    name: string
+    name_short: string
+    code: string
+  },
+  options: {
+    copies?: number
+    darkness?: number
+    speed?: number
+  } = {},
 ): PPLARequest {
-    return {
-        config: {
-            width: config?.width ?? 400,
-            height: config?.height ?? 300,
-            density: config?.density ?? 8,
-            gap: config?.gap ?? 24
-        },
-        fields: [
-            {
-                x: 50,
-                y: 50,
-                content: product.name,
-                field_type: PPLAContentType.Text,
-                font_size: 2
-            },
-            {
-                x: 50,
-                y: 100,
-                content: `R$ ${product.price.toFixed(2)}`,
-                field_type: PPLAContentType.Text,
-                font_size: 2
-            },
-            {
-                x: 50,
-                y: 150,
-                content: product.code,
-                field_type: PPLAContentType.Barcode
-            }
-        ],
-        copies: config?.copies ?? 1
-    };
+  const fields: PPLAField[] = [
+    // Nome do produto (abreviado)
+    {
+      type: "TEXT",
+      x: 10,
+      y: 10,
+      content: product.name_short,
+      fontSize: 3,
+    },
+    // Código de barras
+    {
+      type: "BARCODE",
+      x: 10,
+      y: 40,
+      content: product.code,
+      height: 50,
+      width: 2,
+      humanReadable: true,
+    },
+  ]
+
+  return {
+    width: 100, // Largura da etiqueta em mm
+    height: 100, // Altura da etiqueta em mm
+    fields,
+    copies: options.copies || 1,
+    darkness: options.darkness || 10,
+    speed: options.speed || 2,
+  }
 }
 
-export function createPPLAFromTemplate(
-    template: {
-        width: number;
-        height: number;
-        density: number;
-        fields: string;
-    },
-    product: {
-        name: string;
-        code: string;
-        price: number;
-    },
-    copies: number = 1
-): PPLARequest {
-    const fields = JSON.parse(template.fields).map((field: any) => ({
-        ...field,
-        content: field.field === 'product_name' ? product.name :
-                field.field === 'product_code' ? product.code :
-                field.field === 'price' ? `R$ ${product.price.toFixed(2)}` :
-                field.content
-    }));
-
-    return {
-        config: {
-            width: template.width,
-            height: template.height,
-            density: template.density,
-            gap: 24
-        },
-        fields,
-        copies
-    };
-}

@@ -1,14 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "export",
+  output: 'export',
   images: {
     unoptimized: true,
   },
-  // Desativa a geração de arquivos estáticos durante o desenvolvimento
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+  distDir: 'out'
 }
 
 module.exports = nextConfig
-
