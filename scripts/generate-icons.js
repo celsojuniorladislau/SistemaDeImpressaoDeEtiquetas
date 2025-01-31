@@ -1,7 +1,7 @@
-import sharp from "sharp"
-import { mkdir } from "node:fs/promises"
-import { join } from "node:path"
-import { get } from "node:https"
+const sharp = require("sharp")
+const { mkdir } = require("fs/promises")
+const { join } = require("path")
+const { get } = require("https")
 
 async function downloadImage(url) {
   return new Promise((resolve, reject) => {

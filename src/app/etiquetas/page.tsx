@@ -360,7 +360,7 @@ export default function EtiquetasPage() {
                           onChange={(e) => setLabelData((prev) => ({ ...prev, name_short: e.target.value }))}
                           maxLength={20}
                         />
-                        <span className="absolute right-2 top-2 text-xs text-muted-foreground">
+                        <span className="absolute right-2 top-1/2 -translate-y-5 text-xs text-muted-foreground">
                           {labelData.name_short.length}/20
                         </span>
                         <p className="text-sm text-muted-foreground mt-1">Quantidade Máxima de 20 caracteres.</p>

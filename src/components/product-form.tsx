@@ -139,16 +139,22 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="relative space-y-2">
               <Label htmlFor="name_short">Nome Abreviado</Label>
-              <Input
-                id="name_short"
-                name="name_short"
-                value={product.name_short}
-                onChange={handleChange}
-                maxLength={20}
-                required
-              />
+              <div className="relative">
+                <Input
+                  id="name_short"
+                  name="name_short"
+                  value={product.name_short}
+                  onChange={handleChange}
+                  maxLength={20}
+                  required
+                  className="pr-10"
+                />
+                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                  {product.name_short.length}/20
+                </span>
+              </div>
               <p className="text-sm text-muted-foreground">
                 Máximo de 20 caracteres. Usado na impressão da etiqueta.
               </p>
