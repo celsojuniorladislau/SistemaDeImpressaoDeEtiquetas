@@ -1,8 +1,13 @@
 # Sistema de Etiquetas - Estrela Metais
 
-Sistema desktop desenvolvido para a Estrela Metais para impressão de etiquetas térmicas, com suporte ao protocolo PPLA.
+Sistema desktop desenvolvido para a Estrela Metais para impressão de etiquetas térmicas, com suporte ao protocolo PPLA, desenvolvido com Tauri, Next.js e Rust.
 
 ![Tela do Sistema](./docs/screenshots/dashboard.png)
+![Tela do Sistema](./docs/screenshots/dashboard2.png)
+![Tela do Sistema](./docs/screenshots/produtos.png)
+![Tela do Sistema](./docs/screenshots/impressao.png)
+![Tela do Sistema](./docs/screenshots/etiquetas.png)
+![Tela do Sistema](./docs/screenshots/config.png)
 
 ## 💡 Funcionalidades
 
@@ -33,11 +38,17 @@ Sistema desktop desenvolvido para a Estrela Metais para impressão de etiquetas 
 
 ## 🚀 Instalação
 
+Escolha um dos instaladores disponíveis:
+
+- **MSI** (`Sistema de Etiquetas_1.0.0_x64_en-US.msi`): Recomendado para ambientes corporativos e instalação em rede
+- **NSIS** (`Sistema de Etiquetas_1.0.0_x64-setup.exe`): Recomendado para instalações individuais
+
 ### Requisitos
 
 - Windows 10 ou superior
-- Impressora térmica compatível com protocolo PPLA
-- Porta serial/USB disponível
+- 4GB RAM (mínimo)
+- 100MB de espaço em disco
+- Impressora térmica compatível com PPLA
 
 ### Passos para Instalação
 
@@ -45,6 +56,39 @@ Sistema desktop desenvolvido para a Estrela Metais para impressão de etiquetas 
 2. Execute o instalador e siga as instruções
 3. Conecte a impressora antes de iniciar o sistema
 4. Configure a porta e velocidade da impressora nas configurações
+
+## Guia Rápido
+
+1. **Primeiro Uso**
+   - Instale o sistema usando um dos instaladores
+   - Inicie o sistema através do atalho criado
+   - Configure a impressora em "Configurações"
+
+2. **Cadastro de Produtos**
+   - Acesse "Produtos"
+   - Clique em "Novo Produto"
+   - Preencha os dados (nome, nome abreviado, código)
+   - Clique em "Salvar"
+
+3. **Impressão de Etiquetas**
+   - Acesse "Impressão"
+   - Selecione o produto
+   - Defina a quantidade
+   - Clique em "Imprimir"
+
+4. **Gerenciamento**
+   - Acompanhe impressões em andamento em "Fila"
+   - Visualize impressões realizadas em "Histórico"
+   - Ajuste configurações em "Configurações"
+
+
+## Tecnologias Utilizadas
+
+- [Tauri](https://tauri.app/)
+- [Next.js](https://nextjs.org/)
+- [Rust](https://www.rust-lang.org/)
+- [SQLite](https://www.sqlite.org/)
+- [shadcn/ui](https://ui.shadcn.com/)
 
 ## 👩‍💻 Desenvolvimento
 
@@ -59,3 +103,7 @@ npm run tauri dev
 
 # Gerar instalador
 npm run tauri build
+
+## Licença
+
+Todos os direitos reservados 
