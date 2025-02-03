@@ -62,7 +62,7 @@ export default function HomePage() {
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-bold ">Dashboard</h1>
+        <h1 className="text-3xl font-bold">Dashboard</h1>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

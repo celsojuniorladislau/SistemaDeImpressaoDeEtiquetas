@@ -12,13 +12,13 @@ const menuItems = [
     icon: Home
   },
   {
-    title: "Produtos",
-    href: "/produtos",
+    title: "Impressão",
+    href: "/impressao",
     icon: Package
   },
   {
-    title: "Impressão",
-    href: "/impressao",
+    title: "Produtos",
+    href: "/produtos",
     icon: Printer
   },
   {
