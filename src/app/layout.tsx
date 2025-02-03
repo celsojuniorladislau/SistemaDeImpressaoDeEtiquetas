@@ -2,6 +2,9 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Sidebar } from '@/components/sidebar'
+import { UpdateChecker } from '@/components/Update-checker'
+import { Toaster } from '@/components/ui/toaster'
+import React from 'react'; // Added import for React
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -18,12 +21,14 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={inter.className}>
+        <UpdateChecker />
         <Sidebar />
         <div className="pl-64">
           <main className="p-6">
             {children}
           </main>
         </div>
+        <Toaster />
       </body>
     </html>
   )

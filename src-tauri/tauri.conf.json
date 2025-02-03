@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "Sistema de Etiquetas",
-    "version": "1.0.0"
+    "version": "1.0.2"
   },
   "tauri": {
     "allowlist": {
@@ -18,13 +18,28 @@
       },
       "path": {
         "all": true
+      },
+      "http": {
+        "all": true,
+        "request": true,
+        "scope": ["https://api.github.com/*"]
+      },
+      "dialog": {
+        "all": true
       }
     },
     "bundle": {
       "active": true,
       "targets": "all",
       "identifier": "com.estrela-metais.sistema-etiquetas",
-      "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+      "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+      "publisher": "Estrela Metais"
+    },
+    "updater": {
+      "active": true,
+      "endpoints": ["https://raw.githubusercontent.com/seu-usuario/sistema-etiquetas/main/update.json"],
+      "dialog": true,
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0Qjg2RjgzQzhGOTdGNDUKUldSRmYvbklnMis0dEQ0OXZORXlDYmpaNEcxU1dDa1Q3Zk1HQjNUTXkxTnNDemt3ZTk1eStpbUcK"
     },
     "security": {
       "csp": null
@@ -46,4 +61,3 @@
     ]
   }
 }
-
