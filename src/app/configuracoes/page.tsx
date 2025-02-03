@@ -178,7 +178,7 @@ export default function ConfiguracaoPage() {
         <TabsContent value="defaults" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Configurações Padrão de Impressão</CardTitle>
+              <CardTitle>Configurações Padrão de Impressão das Etiquetas</CardTitle>
               <CardDescription>Define os valores padrão para densidade e velocidade de impressão.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
