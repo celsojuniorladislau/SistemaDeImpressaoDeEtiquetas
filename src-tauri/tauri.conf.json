@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "Sistema de Etiquetas",
-    "version": "1.0.3" 
+    "version": "1.0.4" 
   },
   "tauri": {
     "allowlist": {
@@ -37,7 +37,7 @@
     },
     "updater": {
       "active": true,
-      "endpoints": ["https://raw.githubusercontent.com/seu-usuario/sistema-etiquetas/main/update.json"],
+      "endpoints": ["https://github.com/celsojuniorladislau/sistema-etiquetas-updates.git"],
       "dialog": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI0Qjg2RjgzQzhGOTdGNDUKUldSRmYvbklnMis0dEQ0OXZORXlDYmpaNEcxU1dDa1Q3Zk1HQjNUTXkxTnNDemt3ZTk1eStpbUcK"
     },
