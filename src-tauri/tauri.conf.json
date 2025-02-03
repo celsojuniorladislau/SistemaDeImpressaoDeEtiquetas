@@ -35,7 +35,13 @@
         "height": 600,
         "resizable": true,
         "title": "Sistema de Etiquetas - Estrela Metais",
-        "width": 971
+        "width": 971,
+        "visible": true,
+        "decorations": true,
+        "center": true,
+        "focus": true,
+        "skipTaskbar": false,
+        "alwaysOnTop": false
       }
     ]
   }

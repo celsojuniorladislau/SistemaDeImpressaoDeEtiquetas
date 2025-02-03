@@ -105,7 +105,7 @@ export default function ConfiguracaoPage() {
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">Configuração da Impressora</h2>
+        <h1 className="text-2xl font-bold">Configuração da Impressora</h1>
       </div>
 
       {/* Adicionado o componente PrinterStatus */}

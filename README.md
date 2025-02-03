@@ -3,10 +3,15 @@
 Sistema desktop desenvolvido para a Estrela Metais para impressão de etiquetas térmicas, com suporte ao protocolo PPLA, desenvolvido com Tauri, Next.js e Rust.
 
 ![Tela do Sistema](./docs/screenshots/dashboard.png)
+
 ![Tela do Sistema](./docs/screenshots/dashboard2.png)
+
 ![Tela do Sistema](./docs/screenshots/produtos.png)
+
 ![Tela do Sistema](./docs/screenshots/impressao.png)
+
 ![Tela do Sistema](./docs/screenshots/etiquetas.png)
+
 ![Tela do Sistema](./docs/screenshots/config.png)
 
 ## 💡 Funcionalidades
@@ -35,13 +40,6 @@ Sistema desktop desenvolvido para a Estrela Metais para impressão de etiquetas 
   - Histórico de impressões
   - Estatísticas de uso
   - Status da impressora em tempo real
-
-## 🚀 Instalação
-
-Escolha um dos instaladores disponíveis:
-
-- **MSI** (`Sistema de Etiquetas_1.0.0_x64_en-US.msi`): Recomendado para ambientes corporativos e instalação em rede
-- **NSIS** (`Sistema de Etiquetas_1.0.0_x64-setup.exe`): Recomendado para instalações individuais
 
 ### Requisitos
 
