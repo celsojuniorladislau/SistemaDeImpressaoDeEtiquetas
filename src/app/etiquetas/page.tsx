@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -6,12 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
-import { Printer, ZoomIn, ZoomOut, Save, Sun, Moon } from "lucide-react"
+import { Printer, ZoomIn, ZoomOut, Save, Sun, Moon, AlertCircle, Loader2 } from 'lucide-react'
 import { invoke } from "@tauri-apps/api/tauri"
 import { toast } from "@/components/ui/use-toast"
 import { cn } from "@/lib/utils"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface LabelData {
   name_short: string
@@ -68,34 +69,26 @@ function getEAN13Encoding(code: string): string {
     "1110100",
   ]
 
-  // Ensure we have 12 digits before check digit
   const paddedCode = code.slice(0, 12).padStart(12, "0")
   const checkDigit = calculateEAN13CheckDigit(paddedCode)
   const fullCode = paddedCode + checkDigit
 
-  // First digit determines the pattern of left-hand side
   const firstDigit = Number.parseInt(fullCode[0])
-
-  // Start pattern
   let pattern = "101"
 
-  // Left-hand side (digits 1-6)
   for (let i = 1; i <= 6; i++) {
     const digit = Number.parseInt(fullCode[i])
     const patternSet = firstDigit & (1 << (5 - (i - 1))) ? 1 : 0
     pattern += leftHandPatterns[patternSet][digit]
   }
 
-  // Middle pattern
   pattern += "01010"
 
-  // Right-hand side (digits 7-12)
   for (let i = 7; i <= 12; i++) {
     const digit = Number.parseInt(fullCode[i])
     pattern += rightHandPattern[digit]
   }
 
-  // End pattern
   pattern += "101"
 
   return pattern
@@ -106,6 +99,9 @@ export default function EtiquetasPage() {
   const [loading, setLoading] = useState(false)
   const [darkPreview, setDarkPreview] = useState(false)
   const [codeError, setCodeError] = useState<string>("")
+  const [printerConfig, setPrinterConfig] = useState<PrinterSettings | null>(null)
+  const [printerError, setPrinterError] = useState<string>("")
+  const [initialLoading, setInitialLoading] = useState(true)
   const [labelData, setLabelData] = useState<LabelData>({
     name_short: "Tor.pia.18cm",
     code: "5771",
@@ -123,37 +119,59 @@ export default function EtiquetasPage() {
   })
 
   useEffect(() => {
-    const loadSavedSettings = async () => {
+    const loadPrinterConfig = async () => {
       try {
-        const savedSettings = await invoke<PrinterSettings>("get_printer_settings")
-        if (savedSettings) {
-          setLabelData((prev) => ({
-            ...prev,
-            width: Math.round(savedSettings.width / 8), // Convertendo de dots para mm
-            height: Math.round(savedSettings.height / 8), // Convertendo de dots para mm
-            printSettings: {
-              density: savedSettings.density,
-              speed: savedSettings.speed,
-            },
-          }))
+        const config = await invoke<PrinterSettings | null>("get_printer_settings")
+        setPrinterConfig(config)
+        
+        if (!config) {
+          setPrinterError("Impressora não configurada")
+          toast({
+            variant: "default",
+            title: "Atenção",
+            description: "Configure a impressora antes de imprimir etiquetas.",
+          })
+          return
         }
+
+        setLabelData(prev => ({
+          ...prev,
+          width: Math.round(config.width / 8),
+          height: Math.round(config.height / 8),
+          printSettings: {
+            density: config.density,
+            speed: config.speed,
+          },
+        }))
       } catch (error) {
         console.error("Erro ao carregar configurações:", error)
+        setPrinterError("Erro ao carregar configurações da impressora")
+      } finally {
+        setInitialLoading(false)
       }
     }
 
-    loadSavedSettings()
+    loadPrinterConfig()
   }, [])
 
   const handlePrintTest = async () => {
+    if (!printerConfig) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Configure a impressora antes de imprimir.",
+      })
+      return
+    }
+
     try {
       setLoading(true)
       await invoke("print_test_label", {
         labelData: {
           name_short: labelData.name_short,
           code: labelData.code,
-          width: labelData.width * 8, // Convertendo mm para dots
-          height: labelData.height * 8, // Convertendo mm para dots
+          width: labelData.width * 8,
+          height: labelData.height * 8,
           print_settings: labelData.printSettings,
         },
       })
@@ -176,11 +194,11 @@ export default function EtiquetasPage() {
   const handleSaveSettings = async () => {
     try {
       const settings = {
-        port: "COM1", // Usando porta padrão
-        baud_rate: 9600, // Usando baud rate padrão
+        port: printerConfig?.port || "COM1",
+        baud_rate: printerConfig?.baud_rate || 9600,
         density: labelData.printSettings.density,
-        width: labelData.width * 8, // Convertendo mm para dots
-        height: labelData.height * 8, // Convertendo mm para dots
+        width: labelData.width * 8,
+        height: labelData.height * 8,
         speed: labelData.printSettings.speed,
       }
 
@@ -231,10 +249,8 @@ export default function EtiquetasPage() {
     }))
   }
 
-  // Convertendo mm para pixels (aproximadamente)
   const mmToPx = (mm: number) => mm * 3.7795275591 * previewScale
 
-  // Gera código de barras EAN-13
   const generateBarcode = () => {
     const code = ("789846581" + labelData.code).slice(0, 12)
     const checkDigit = calculateEAN13CheckDigit(code)
@@ -277,8 +293,35 @@ export default function EtiquetasPage() {
     return true
   }
 
+  if (initialLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <p className="text-sm text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="container mx-auto p-4 space-y-6">
+      {printerError && (
+        <Alert variant="default">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-center gap-2">
+            {printerError}
+            <Button 
+              variant="link" 
+              className="px-2 py-0 h-auto"
+              onClick={() => window.location.href = '/configuracoes'}
+            >
+              Configurar Impressora
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Editor de Etiquetas</h1>
         <div className="flex items-center gap-2">
@@ -300,23 +343,31 @@ export default function EtiquetasPage() {
               {darkPreview ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
           </div>
-          <Button onClick={handlePrintTest} disabled={loading}>
-            <Printer className="mr-2 h-4 w-4" />
+          <Button 
+            onClick={handlePrintTest} 
+            disabled={loading || !printerConfig}
+            className="relative"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Printer className="h-4 w-4 mr-2" />
+            )}
             {loading ? "Imprimindo..." : "Imprimir Teste"}
+            {!printerConfig && (
+              <span className="absolute -top-2 -right-2 w-2 h-2 bg-red-500 rounded-full" />
+            )}
           </Button>
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Configurações da Etiqueta */}
         <Card>
           <CardHeader>
             <CardTitle>Configurações da Etiqueta</CardTitle>
           </CardHeader>
           <CardContent>
-            {/* <Accordion type="multiple" defaultValue={["label-size", "label-content", "print-settings"]}>*/}
-            {/* deixa os itens estejam abertos inicialmente, quando o sistema abre*/}
-            <Accordion type="multiple" defaultValue={[]}> {/* deixa os itens estejam fechados inicialmente*/}
+            <Accordion type="multiple" defaultValue={[]}>
               <AccordionItem value="label-size">
                 <AccordionTrigger>Dimensões da Etiqueta</AccordionTrigger>
                 <AccordionContent>
@@ -439,7 +490,6 @@ export default function EtiquetasPage() {
           </CardContent>
         </Card>
 
-        {/* Visualização da Etiqueta */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
@@ -457,7 +507,6 @@ export default function EtiquetasPage() {
               )}
               style={{ maxWidth: "400px", margin: "0 auto" }}
             >
-              {/* Container da Etiqueta */}
               <div
                 className={cn("bg-white shadow-lg flex flex-col relative rounded-lg", "transition-all duration-200")}
                 style={{
@@ -467,7 +516,6 @@ export default function EtiquetasPage() {
                 }}
               >
                 <div className="flex-1 flex flex-col justify-start items-center gap-[0.15rem]">
-                  {/* Nome da Empresa */}
                   <div
                     className="w-full text-center font-bold tracking-wide"
                     style={{ fontSize: `${labelData.fontSize.company * previewScale * 0.1}rem` }}
@@ -475,7 +523,6 @@ export default function EtiquetasPage() {
                     ESTRELA METAIS
                   </div>
 
-                  {/* Nome Abreviado */}
                   <div
                     className="w-full text-center font-medium"
                     style={{ fontSize: `${labelData.fontSize.product * previewScale * 0.1}rem` }}
@@ -483,7 +530,6 @@ export default function EtiquetasPage() {
                     {labelData.name_short}
                   </div>
 
-                  {/* Código do Produto */}
                   <div
                     className="w-full text-center font-medium"
                     style={{ fontSize: `${labelData.fontSize.code * previewScale * 0.1}rem` }}
@@ -492,12 +538,10 @@ export default function EtiquetasPage() {
                   </div>
                 </div>
 
-                {/* Código de Barras EAN-13 */}
                 <div className="mt-auto w-full flex justify-center">{generateBarcode()}</div>
               </div>
             </div>
 
-            {/* Informações Adicionais */}
             <div className="mt-4 text-center text-sm text-muted-foreground">
               <p>
                 Dimensões: {labelData.width}mm x {labelData.height}mm
@@ -513,4 +557,3 @@ export default function EtiquetasPage() {
     </div>
   )
 }
-

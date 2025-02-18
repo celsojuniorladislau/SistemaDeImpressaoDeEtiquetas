@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus } from "lucide-react"
+import { Plus } from 'lucide-react'
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
@@ -38,7 +38,7 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
   const [product, setProduct] = useState<Product>({
     name: "",
     name_short: "",
-    code: "",
+    code: "", // Será gerado automaticamente
     description: "",
   })
   const isEditing = !!productId
@@ -76,7 +76,7 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
       const productData = {
         name: product.name,
         name_short: product.name_short,
-        code: product.code,
+        code: product.code, // No modo de criação, será ignorado e gerado pelo backend
         description: product.description,
       }
 
@@ -87,10 +87,11 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
           description: "Produto atualizado com sucesso.",
         })
       } else {
-        await invoke("create_product", { product: productData })
+        // O backend retornará o produto com o código gerado
+        const savedProduct = await invoke<Product>("create_product", { product: productData })
         toast({
           title: "Sucesso",
-          description: "Produto criado com sucesso.",
+          description: `Produto criado com sucesso. Código de barras: ${savedProduct.code}`,
         })
       }
 
@@ -128,7 +129,11 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar" : "Novo"} Produto</DialogTitle>
-          <DialogDescription>Preencha os dados do produto. Clique em salvar quando terminar.</DialogDescription>
+          <DialogDescription>
+            {isEditing 
+              ? "Edite os dados do produto. Clique em salvar quando terminar."
+              : "Preencha os dados do produto. O código de barras será gerado automaticamente."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-4">
@@ -166,17 +171,18 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
               </p>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="code">Código</Label>
-              <Input
-                id="code"
-                name="code"
-                value={product.code}
-                onChange={handleChange}
-                placeholder="Código do produto"
-                required
-              />
-            </div>
+            {isEditing && (
+              <div className="space-y-2">
+                <Label htmlFor="code">Código de Barras</Label>
+                <Input
+                  id="code"
+                  name="code"
+                  value={product.code}
+                  readOnly
+                  className="bg-muted"
+                />
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="description">Descrição</Label>
@@ -202,4 +208,3 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
     </Dialog>
   )
 }
-

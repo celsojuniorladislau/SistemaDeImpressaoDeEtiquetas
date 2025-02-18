@@ -3,57 +3,47 @@
 import { useState, useEffect } from "react"
 import { invoke } from "@tauri-apps/api/tauri"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { toast } from "@/components/ui/use-toast"
-import { Printer, RefreshCcw } from "lucide-react"
-import { PrinterStatus } from "@/components/printer-status"
+import { Printer, RefreshCcw } from 'lucide-react'
 
 interface PrinterConfig {
-  port: string
-  baud_rate: number
-  density: number
+  darkness: number
   width: number
   height: number
   speed: number
 }
 
 export default function ConfiguracaoPage() {
-  const [ports, setPorts] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
+  const [printers, setPrinters] = useState<string[]>([])
   const [config, setConfig] = useState<PrinterConfig>({
-    port: "",
-    baud_rate: 9600,
-    density: 8,
+    darkness: 8,
     width: 400,
     height: 240,
     speed: 2,
   })
 
-  useEffect(() => {
-    loadPorts()
-    loadSavedConfig()
-  }, [])
-
-  const loadPorts = async () => {
+  const searchPrinters = async () => {
     try {
-      const availablePorts = await invoke<string[]>("list_serial_ports")
-      setPorts(availablePorts)
+      const found = await invoke<string[]>("list_printers")
+      setPrinters(found)
 
-      // Se encontrar portas, seleciona a primeira
-      if (availablePorts.length > 0 && !config.port) {
-        setConfig((prev) => ({ ...prev, port: availablePorts[0] }))
+      if (found.length === 0) {
+        toast({
+          variant: "destructive",
+          title: "Atenção",
+          description: "Nenhuma impressora Argox encontrada. Verifique se está conectada.",
+        })
       }
     } catch (error) {
-      console.error("Erro ao listar portas:", error)
+      console.error("Erro ao procurar impressoras:", error)
       toast({
         variant: "destructive",
         title: "Erro",
-        description: "Não foi possível listar as portas da impressora.",
+        description: "Erro ao procurar impressoras: " + error,
       })
     }
   }
@@ -69,197 +59,160 @@ export default function ConfiguracaoPage() {
     }
   }
 
-  const handleTestPrint = async () => {
-    if (!config.port) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Selecione uma porta da impressora",
-      })
-      return
-    }
+  useEffect(() => {
+    searchPrinters()
+    loadSavedConfig()
+  }, [])
 
+  const connectPrinter = async () => {
     setLoading(true)
     try {
-      await invoke("test_printer_connection", { config })
-
-      // Se o teste foi bem sucedido, salva as configurações
+      await invoke("connect_printer", { config })
       await invoke("save_printer_settings", { config })
-
+      
       toast({
         title: "Sucesso",
-        description: "Teste de impressão realizado com sucesso!",
+        description: "Impressora conectada com sucesso!",
       })
     } catch (error) {
-      console.error("Erro ao imprimir:", error)
       toast({
         variant: "destructive",
         title: "Erro",
-        description: "Erro ao realizar teste de impressão. Verifique a conexão com a impressora.",
+        description: "Erro ao conectar impressora: " + error,
       })
     } finally {
       setLoading(false)
     }
   }
 
+  const testPrint = async () => {
+    try {
+      await invoke("print_test")
+      toast({
+        title: "Sucesso",
+        description: "Teste de impressão enviado com sucesso!",
+      })
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Erro ao imprimir teste: " + error,
+      })
+    }
+  }
+
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Configuração da Impressora</h1>
+        <h1 className="text-2xl font-bold">Configuração da Impressora Argox OS-2140</h1>
+        <Button 
+          variant="outline" 
+          onClick={searchPrinters}
+          className="flex items-center gap-2"
+        >
+          <RefreshCcw className="h-4 w-4" />
+          Procurar Impressora
+        </Button>
       </div>
 
-      {/* Adicionado o componente PrinterStatus */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <PrinterStatus />
-      </div>
+      {printers.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Impressora Encontrada</CardTitle>
+            <CardDescription>
+              {printers.join(", ")}
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-destructive">Nenhuma Impressora</CardTitle>
+            <CardDescription>
+              Verifique se a impressora Argox OS-2140 está:
+              <ul className="list-disc pl-4 mt-2">
+                <li>Conectada via USB</li>
+                <li>Ligada (LED verde aceso)</li>
+                <li>Com papel instalado</li>
+              </ul>
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
 
-      <Tabs defaultValue="connection" className="space-y-4">
+      <Tabs defaultValue="settings" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="connection">Conexão</TabsTrigger>
-          <TabsTrigger value="defaults">Padrões de Impressão</TabsTrigger>
+          <TabsTrigger value="settings">Configurações</TabsTrigger>
+          <TabsTrigger value="test">Teste</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="connection" className="space-y-4">
+        <TabsContent value="settings">
           <Card>
             <CardHeader>
-              <CardTitle>Configurações de Conexão</CardTitle>
-              <CardDescription>Configure os parâmetros de conexão com a impressora térmica.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="flex items-end gap-2">
-                <div className="flex-1 space-y-2">
-                  <Label>Porta da Impressora</Label>
-                  <Select
-                    value={config.port}
-                    onValueChange={(value) => setConfig((prev) => ({ ...prev, port: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione uma porta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ports.map((port) => (
-                        <SelectItem key={port} value={port}>
-                          {port}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button variant="outline" size="icon" onClick={loadPorts}>
-                  <RefreshCcw className="h-4 w-4" />
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Velocidade (Baud Rate)</Label>
-                <Select
-                  value={config.baud_rate.toString()}
-                  onValueChange={(value) => setConfig((prev) => ({ ...prev, baud_rate: Number.parseInt(value) }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a velocidade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="9600">9600</SelectItem>
-                    <SelectItem value="19200">19200</SelectItem>
-                    <SelectItem value="38400">38400</SelectItem>
-                    <SelectItem value="57600">57600</SelectItem>
-                    <SelectItem value="115200">115200</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground">
-                  Velocidade de comunicação com a impressora. Geralmente 9600.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="defaults" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Configurações Padrão de Impressão das Etiquetas</CardTitle>
-              <CardDescription>Define os valores padrão para densidade e velocidade de impressão.</CardDescription>
+              <CardTitle>Configurações de Impressão</CardTitle>
+              <CardDescription>Ajuste os parâmetros de impressão</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label>Densidade de Impressão Padrão</Label>
+                <label className="text-sm font-medium">Densidade de Impressão</label>
                 <div className="flex items-center gap-4">
                   <Slider
-                    value={[config.density]}
-                    onValueChange={(value) => setConfig((prev) => ({ ...prev, density: value[0] }))}
+                    value={[config.darkness]}
+                    onValueChange={(value) => setConfig(prev => ({ ...prev, darkness: value[0] }))}
                     min={1}
                     max={15}
                     step={1}
                     className="flex-1"
                   />
-                  <span className="w-12 text-center">{config.density}</span>
+                  <span className="w-12 text-center">{config.darkness}</span>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Ajusta o contraste padrão da impressão (1-15). Valores mais altos resultam em impressão mais escura.
-                </p>
               </div>
 
               <div className="space-y-2">
-                <Label>Velocidade de Impressão Padrão</Label>
-                <Select
-                  value={config.speed.toString()}
-                  onValueChange={(value) => setConfig((prev) => ({ ...prev, speed: Number.parseInt(value) }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a velocidade" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">1 - Lenta (Maior Qualidade)</SelectItem>
-                    <SelectItem value="2">2 - Normal</SelectItem>
-                    <SelectItem value="3">3 - Rápida</SelectItem>
-                    <SelectItem value="4">4 - Muito Rápida</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-sm text-muted-foreground">
-                  Velocidade padrão de impressão. Velocidades mais baixas geralmente resultam em melhor qualidade.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Largura Padrão (dots)</Label>
-                  <Input
-                    type="number"
-                    value={config.width}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, width: Number.parseInt(e.target.value) }))}
+                <label className="text-sm font-medium">Velocidade</label>
+                <div className="flex items-center gap-4">
+                  <Slider
+                    value={[config.speed]}
+                    onValueChange={(value) => setConfig(prev => ({ ...prev, speed: value[0] }))}
+                    min={1}
+                    max={4}
+                    step={1}
+                    className="flex-1"
                   />
-                  <p className="text-xs text-muted-foreground">8 dots = 1mm</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Altura Padrão (dots)</Label>
-                  <Input
-                    type="number"
-                    value={config.height}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, height: Number.parseInt(e.target.value) }))}
-                  />
-                  <p className="text-xs text-muted-foreground">8 dots = 1mm</p>
+                  <span className="w-12 text-center">{config.speed}</span>
                 </div>
               </div>
+
+              <Button 
+                onClick={connectPrinter} 
+                disabled={loading || printers.length === 0}
+                className="w-full"
+              >
+                {loading ? "Conectando..." : "Conectar e Salvar"}
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="test">
+          <Card>
+            <CardHeader>
+              <CardTitle>Teste de Impressão</CardTitle>
+              <CardDescription>Imprima uma etiqueta de teste</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                onClick={testPrint}
+                disabled={printers.length === 0}
+                className="w-full"
+              >
+                <Printer className="mr-2 h-4 w-4" />
+                Imprimir Teste
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Teste de Impressão</CardTitle>
-          <CardDescription>Realiza um teste de impressão com as configurações atuais.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={handleTestPrint} disabled={loading || !config.port} className="w-full">
-            <Printer className="mr-2 h-4 w-4" />
-            {loading ? "Imprimindo..." : "Imprimir Teste"}
-          </Button>
-        </CardContent>
-      </Card>
     </div>
   )
 }
-

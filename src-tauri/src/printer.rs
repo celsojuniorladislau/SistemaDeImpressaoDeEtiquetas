@@ -1,13 +1,16 @@
+use rusb::{Context, Device, DeviceHandle, UsbContext};
 use serde::{Deserialize, Serialize};
-use serialport::{SerialPort, SerialPortType};
-use std::io::Write;
 use std::time::Duration;
-use thiserror::Error;
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
+
+// Constantes da Argox OS-2140
+const ARGOX_VID: u16 = 0x1CBE;
+const ARGOX_PID: u16 = 0x0002;
+const TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PrinterConfig {
-    pub port: String,
-    pub baud_rate: u32,
     pub darkness: u8,      // Densidade de impressão (1-15)
     pub width: u32,        // Largura em dots (8 dots = 1mm)
     pub height: u32,       // Altura em dots
@@ -17,8 +20,6 @@ pub struct PrinterConfig {
 impl Default for PrinterConfig {
     fn default() -> Self {
         Self {
-            port: String::new(),
-            baud_rate: 9600,
             darkness: 8,    // Densidade média
             width: 400,     // 50mm * 8 dots
             height: 240,    // 30mm * 8 dots
@@ -27,237 +28,186 @@ impl Default for PrinterConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PPLACommand {
-    pub command_type: String,
-    pub x: i32,
-    pub y: i32,
-    pub rotation: i32,
-    pub font: String,
-    pub horizontal_multiplier: i32,
-    pub vertical_multiplier: i32,
-    pub reverse: bool,
-    pub text: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct PrintJob {
-    pub id: String,
-    pub commands: Vec<PPLACommand>,
-    pub copies: u32,
-    pub status: PrintStatus,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum PrintStatus {
-    Pending,
-    Printing,
-    Completed,
-    Failed(String),
-}
-
-#[derive(Debug, Error)]
-pub enum PrinterError {
-    #[error("Erro de porta serial: {0}")]
-    SerialPort(#[from] serialport::Error),
-    #[error("Porta não encontrada: {0}")]
-    PortNotFound(String),
-    #[error("Erro de comunicação: {0}")]
-    Communication(String),
-}
-
-pub struct PPLAPrinter {
+pub struct UsbPrinter {
+    handle: DeviceHandle<Context>,
+    endpoint_out: u8,
+    endpoint_in: u8,
     config: PrinterConfig,
-    port: Option<Box<dyn SerialPort>>,
 }
 
-impl PPLAPrinter {
-    pub fn new(config: PrinterConfig) -> Self {
-        Self {
-            config,
-            port: None,
+impl UsbPrinter {
+    pub fn new(config: PrinterConfig) -> Result<Self, String> {
+        let context = Context::new()
+            .map_err(|e| format!("Erro ao criar contexto USB: {}", e))?;
+
+        // Procura a impressora Argox
+        let (device, device_desc) = context
+            .devices()
+            .map_err(|e| format!("Erro ao listar dispositivos: {}", e))?
+            .iter()
+            .find(|device| {
+                device
+                    .device_descriptor()
+                    .map(|desc| desc.vendor_id() == ARGOX_VID && desc.product_id() == ARGOX_PID)
+                    .unwrap_or(false)
+            })
+            .and_then(|device| {
+                device
+                    .device_descriptor()
+                    .map(|desc| (device, desc))
+                    .ok()
+            })
+            .ok_or("Impressora Argox OS-2140 não encontrada")?;
+
+        // Configura a impressora
+        let mut handle = device
+            .open()
+            .map_err(|e| format!("Erro ao abrir dispositivo: {}", e))?;
+
+        // Reset do dispositivo
+        handle
+            .reset()
+            .map_err(|e| format!("Erro ao resetar dispositivo: {}", e))?;
+
+        // Encontra os endpoints
+        let config_desc = device
+            .config_descriptor(0)
+            .map_err(|e| format!("Erro ao ler configuração: {}", e))?;
+
+        let interface = config_desc
+            .interfaces()
+            .next()
+            .ok_or("Interface não encontrada")?;
+
+        let interface_desc = interface
+            .descriptors()
+            .next()
+            .ok_or("Descritor de interface não encontrado")?;
+
+        // Configura a interface
+        handle
+            .claim_interface(interface_desc.interface_number())
+            .map_err(|e| format!("Erro ao configurar interface: {}", e))?;
+
+        // Encontra endpoints
+        let mut endpoint_out = None;
+        let mut endpoint_in = None;
+
+        for endpoint_desc in interface_desc.endpoint_descriptors() {
+            match endpoint_desc.direction() {
+                rusb::Direction::Out => endpoint_out = Some(endpoint_desc.address()),
+                rusb::Direction::In => endpoint_in = Some(endpoint_desc.address()),
+            }
         }
+
+        let endpoint_out = endpoint_out.ok_or("Endpoint de saída não encontrado")?;
+        let endpoint_in = endpoint_in.ok_or("Endpoint de entrada não encontrado")?;
+
+        Ok(UsbPrinter {
+            handle,
+            endpoint_out,
+            endpoint_in,
+            config,
+        })
     }
 
-    pub fn connect(&mut self) -> Result<(), PrinterError> {
-        let port = serialport::new(&self.config.port, self.config.baud_rate)
-            .data_bits(serialport::DataBits::Eight)
-            .parity(serialport::Parity::None)
-            .stop_bits(serialport::StopBits::One)
-            .timeout(Duration::from_millis(1000))
-            .open()?;
-
-        self.port = Some(port);
-        Ok(())
+    pub fn write(&self, data: &[u8]) -> Result<usize, String> {
+        self.handle
+            .write_bulk(self.endpoint_out, data, TIMEOUT)
+            .map_err(|e| format!("Erro ao enviar dados: {}", e))
     }
 
-    pub fn print(&mut self, job: &PrintJob) -> Result<(), PrinterError> {
-        let port = self.port.as_mut()
-            .ok_or_else(|| PrinterError::Communication("Impressora não conectada".to_string()))?;
+    pub fn read(&self, buffer: &mut [u8]) -> Result<usize, String> {
+        self.handle
+            .read_bulk(self.endpoint_in, buffer, TIMEOUT)
+            .map_err(|e| format!("Erro ao ler dados: {}", e))
+    }
 
-        // Configuração inicial da etiqueta
-        let setup_commands = vec![
-            format!("Q{},{}\r\n", self.config.height, 0),  // Altura
-            format!("q{}\r\n", self.config.width),         // Largura
-            format!("S{}\r\n", self.config.speed),         // Velocidade
-            format!("D{}\r\n", self.config.darkness),      // Densidade
-            "ZT\r\n".to_string(),                         // Limpa buffer
+    pub fn print_label(&self, text: &str) -> Result<(), String> {
+        let commands = vec![
+            format!("Q{},24\r\n", self.config.height),  // Altura
+            format!("q{}\r\n", self.config.width),      // Largura
+            format!("S{}\r\n", self.config.speed),      // Velocidade
+            format!("D{}\r\n", self.config.darkness),   // Densidade
+            "ZT\r\n".to_string(),                      // Limpa buffer
+            format!("A50,50,0,3,1,1,N,\"{}\"\r\n", text), // Texto
+            "P1\r\n".to_string(),                      // Imprime
         ];
 
-        // Envia configurações
-        for cmd in setup_commands {
-            port.write_all(cmd.as_bytes())
-                .map_err(|e| PrinterError::Communication(e.to_string()))?;
+        for cmd in commands {
+            self.write(cmd.as_bytes())?;
         }
-
-        // Envia comandos PPLA
-        for cmd in &job.commands {
-            let ppla_cmd = match cmd.command_type.as_str() {
-                "text" => format!(
-                    "A{},{},{},{},{},{},{},\"{}\"\r\n",
-                    cmd.x,
-                    cmd.y,
-                    cmd.rotation,
-                    cmd.font,
-                    cmd.horizontal_multiplier,
-                    cmd.vertical_multiplier,
-                    if cmd.reverse { "R" } else { "N" },
-                    cmd.text
-                ),
-                "barcode" => format!(
-                    "B{},{},{},\"{}\"\r\n",
-                    cmd.x,
-                    cmd.y,
-                    "2", // Código 128
-                    cmd.text
-                ),
-                _ => continue,
-            };
-
-            port.write_all(ppla_cmd.as_bytes())
-                .map_err(|e| PrinterError::Communication(e.to_string()))?;
-        }
-
-        // Imprime o número de cópias especificado
-        port.write_all(format!("P{}\r\n", job.copies).as_bytes())
-            .map_err(|e| PrinterError::Communication(e.to_string()))?;
 
         Ok(())
     }
 
-    pub fn disconnect(&mut self) {
-        self.port = None;
+    pub fn test_connection(&self) -> Result<(), String> {
+        // Envia comando de status
+        self.write(b"~H\r\n")?;
+        
+        // Lê resposta
+        let mut buffer = [0u8; 32];
+        let read = self.read(&mut buffer)?;
+        
+        if read > 0 {
+            Ok(())
+        } else {
+            Err("Impressora não respondeu".to_string())
+        }
+    }
+}
+
+// Estado global da impressora
+pub static PRINTER: Lazy<Mutex<Option<UsbPrinter>>> = Lazy::new(|| Mutex::new(None));
+
+#[tauri::command]
+pub async fn connect_printer(config: PrinterConfig) -> Result<(), String> {
+    let printer = UsbPrinter::new(config)?;
+    
+    // Testa a conexão
+    printer.test_connection()?;
+    
+    // Se chegou aqui, salva a impressora no estado global
+    let mut printer_guard = PRINTER.lock().unwrap();
+    *printer_guard = Some(printer);
+    
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn print_test() -> Result<(), String> {
+    let printer_guard = PRINTER.lock().unwrap();
+    
+    if let Some(printer) = &*printer_guard {
+        printer.print_label("Teste de Impressão")?;
+        Ok(())
+    } else {
+        Err("Impressora não conectada".to_string())
     }
 }
 
 #[tauri::command]
-pub async fn list_serial_ports() -> Result<Vec<String>, String> {
-    let ports = serialport::available_ports()
-        .map_err(|e| e.to_string())?;
-    
-    Ok(ports.into_iter()
-        .filter_map(|port| {
-            if let SerialPortType::UsbPort(_) = port.port_type {
-                Some(port.port_name)
-            } else {
-                None
+pub async fn list_printers() -> Result<Vec<String>, String> {
+    let context = Context::new()
+        .map_err(|e| format!("Erro ao criar contexto USB: {}", e))?;
+
+    let devices = context
+        .devices()
+        .map_err(|e| format!("Erro ao listar dispositivos: {}", e))?;
+
+    let mut printers = Vec::new();
+
+    for device in devices.iter() {
+        if let Ok(desc) = device.device_descriptor() {
+            if desc.vendor_id() == ARGOX_VID && desc.product_id() == ARGOX_PID {
+                if let Ok(handle) = device.open() {
+                    if let Ok(product) = handle.read_product_string_ascii(&desc) {
+                        printers.push(product);
+                    }
+                }
             }
-        })
-        .collect())
+        }
+    }
+
+    Ok(printers)
 }
-
-#[tauri::command]
-pub async fn print_product_label(
-    product: crate::Product, 
-    config: PrinterConfig,
-    copies: u32
-) -> Result<(), String> {
-    let mut printer = PPLAPrinter::new(config.clone());
-    
-    printer.connect()
-        .map_err(|e| e.to_string())?;
-
-    let job = PrintJob {
-        id: format!("job_{}", chrono::Utc::now().timestamp()),
-        commands: vec![
-            // Código de barras
-            PPLACommand {
-                command_type: "barcode".to_string(),
-                x: 50,
-                y: 10,
-                rotation: 0,
-                font: "".to_string(),
-                horizontal_multiplier: 1,
-                vertical_multiplier: 1,
-                reverse: false,
-                text: product.code.clone(),
-            },
-            // Nome do produto
-            PPLACommand {
-                command_type: "text".to_string(),
-                x: 50,
-                y: 50,
-                rotation: 0,
-                font: "3".to_string(),
-                horizontal_multiplier: 1,
-                vertical_multiplier: 1,
-                reverse: false,
-                text: product.name_short.clone(),
-            },
-            // Código do produto
-            PPLACommand {
-                command_type: "text".to_string(),
-                x: 50,
-                y: 80,
-                rotation: 0,
-                font: "2".to_string(),
-                horizontal_multiplier: 1,
-                vertical_multiplier: 1,
-                reverse: false,
-                text: product.code,
-            },
-        ],
-        copies,
-        status: PrintStatus::Pending,
-    };
-
-    printer.print(&job)
-        .map_err(|e| e.to_string())?;
-
-    printer.disconnect();
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn test_printer_connection(config: PrinterConfig) -> Result<(), String> {
-    let mut printer = PPLAPrinter::new(config);
-    
-    printer.connect()
-        .map_err(|e| e.to_string())?;
-
-    let test_job = PrintJob {
-        id: "test".to_string(),
-        commands: vec![
-            PPLACommand {
-                command_type: "text".to_string(),
-                x: 50,
-                y: 50,
-                rotation: 0,
-                font: "3".to_string(),
-                horizontal_multiplier: 1,
-                vertical_multiplier: 1,
-                reverse: false,
-                text: "Teste de Impressão".to_string(),
-            },
-        ],
-        copies: 1,
-        status: PrintStatus::Pending,
-    };
-
-    printer.print(&test_job)
-        .map_err(|e| e.to_string())?;
-
-    printer.disconnect();
-    Ok(())
-}
-

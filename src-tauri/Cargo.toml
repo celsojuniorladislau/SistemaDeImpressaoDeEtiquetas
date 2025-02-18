@@ -15,10 +15,11 @@ tauri = { version = "1.5", features = [ "dialog-all", "http-all", "updater", "fs
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 rusqlite = { version = "0.29.0", features = ["bundled"] }
-serialport = "4.2.2"
+rusb = "0.9"  # Substituindo serialport por rusb
 tokio = { version = "1.0", features = ["full"] }
 chrono = "0.4"
 thiserror = "1.0"
+once_cell = "1.7"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
