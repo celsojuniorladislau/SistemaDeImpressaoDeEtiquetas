@@ -4,7 +4,7 @@
  
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 0 0% 98%;
     --foreground: 222.2 84% 4.9%;
 
     /* Light Blue Primary */
@@ -12,11 +12,11 @@
     --primary-foreground: 0 0% 100%;
 
     /* Card Colors */
-    --card: 0 0% 100%;
+    --card: 0 0% 98%;
     --card-foreground: 222.2 84% 4.9%;
 
     /* Popover Colors */
-    --popover: 0 0% 100%;
+    --popover: 0 0% 98%;
     --popover-foreground: 222.2 84% 4.9%;
 
     /* Light Blue Secondary */
@@ -53,4 +53,8 @@
     margin: 0;
     padding: 0;
   }
+}
+
+.dashboard-card {
+  @apply bg-blue-100;
 }

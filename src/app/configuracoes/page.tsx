@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
-import { toast } from "@/components/ui/use-toast"
-import { Printer, RefreshCcw } from 'lucide-react'
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { toast } from "sonner"
+import { Printer, RefreshCcw, Settings, AlertCircle } from 'lucide-react'
 
 interface PrinterConfig {
   darkness: number
@@ -25,25 +27,29 @@ export default function ConfiguracaoPage() {
     height: 240,
     speed: 2,
   })
+  const [debugInfo, setDebugInfo] = useState<string>("")
 
   const searchPrinters = async () => {
+    setDebugInfo("Procurando impressoras...")
     try {
       const found = await invoke<string[]>("list_printers")
       setPrinters(found)
+      setDebugInfo(`Impressoras encontradas: ${found.join(", ")}`)
 
       if (found.length === 0) {
-        toast({
-          variant: "destructive",
-          title: "Atenção",
-          description: "Nenhuma impressora Argox encontrada. Verifique se está conectada.",
+        toast.error("Nenhuma impressora Argox encontrada", {
+          description: "Verifique se está conectada e ligada."
+        })
+      } else {
+        toast.success("Impressora encontrada!", {
+          description: found[0]
         })
       }
     } catch (error) {
       console.error("Erro ao procurar impressoras:", error)
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Erro ao procurar impressoras: " + error,
+      setDebugInfo(`Erro: ${error}`)
+      toast.error("Erro ao procurar impressoras", {
+        description: String(error)
       })
     }
   }
@@ -53,9 +59,11 @@ export default function ConfiguracaoPage() {
       const savedConfig = await invoke<PrinterConfig | null>("get_printer_settings")
       if (savedConfig) {
         setConfig(savedConfig)
+        setDebugInfo("Configurações carregadas com sucesso")
       }
     } catch (error) {
       console.error("Erro ao carregar configurações:", error)
+      setDebugInfo(`Erro ao carregar configurações: ${error}`)
     }
   }
 
@@ -66,19 +74,19 @@ export default function ConfiguracaoPage() {
 
   const connectPrinter = async () => {
     setLoading(true)
+    setDebugInfo("Tentando conectar à impressora...")
     try {
       await invoke("connect_printer", { config })
       await invoke("save_printer_settings", { config })
       
-      toast({
-        title: "Sucesso",
-        description: "Impressora conectada com sucesso!",
+      setDebugInfo("Impressora conectada e configurações salvas")
+      toast.success("Impressora conectada!", {
+        description: "Configurações salvas com sucesso."
       })
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Erro ao conectar impressora: " + error,
+      setDebugInfo(`Erro na conexão: ${error}`)
+      toast.error("Erro ao conectar impressora", {
+        description: String(error)
       })
     } finally {
       setLoading(false)
@@ -86,17 +94,17 @@ export default function ConfiguracaoPage() {
   }
 
   const testPrint = async () => {
+    setDebugInfo("Enviando teste de impressão...")
     try {
       await invoke("print_test")
-      toast({
-        title: "Sucesso",
-        description: "Teste de impressão enviado com sucesso!",
+      setDebugInfo("Teste de impressão enviado com sucesso")
+      toast.success("Teste enviado!", {
+        description: "Verifique a impressora"
       })
     } catch (error) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Erro ao imprimir teste: " + error,
+      setDebugInfo(`Erro no teste: ${error}`)
+      toast.error("Erro ao imprimir teste", {
+        description: String(error)
       })
     }
   }
@@ -104,7 +112,9 @@ export default function ConfiguracaoPage() {
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Configuração da Impressora Argox OS-2140</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Configuração da Impressora Argox OS-2140</h1>
+        </div>
         <Button 
           variant="outline" 
           onClick={searchPrinters}
@@ -118,7 +128,10 @@ export default function ConfiguracaoPage() {
       {printers.length > 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Impressora Encontrada</CardTitle>
+            <div className="flex items-center gap-2">
+              <Printer className="h-5 w-5 text-green-500" />
+              <CardTitle>Impressora Encontrada</CardTitle>
+            </div>
             <CardDescription>
               {printers.join(", ")}
             </CardDescription>
@@ -127,13 +140,17 @@ export default function ConfiguracaoPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle className="text-destructive">Nenhuma Impressora</CardTitle>
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-destructive" />
+              <CardTitle className="text-destructive">Nenhuma Impressora</CardTitle>
+            </div>
             <CardDescription>
               Verifique se a impressora Argox OS-2140 está:
               <ul className="list-disc pl-4 mt-2">
                 <li>Conectada via USB</li>
                 <li>Ligada (LED verde aceso)</li>
                 <li>Com papel instalado</li>
+                <li>Driver USB instalado corretamente</li>
               </ul>
             </CardDescription>
           </CardHeader>
@@ -142,8 +159,14 @@ export default function ConfiguracaoPage() {
 
       <Tabs defaultValue="settings" className="space-y-4">
         <TabsList>
-          <TabsTrigger value="settings">Configurações</TabsTrigger>
-          <TabsTrigger value="test">Teste</TabsTrigger>
+          <TabsTrigger value="settings" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Configurações
+          </TabsTrigger>
+          <TabsTrigger value="test" className="flex items-center gap-2">
+            <Printer className="h-4 w-4" />
+            Teste
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="settings">
@@ -154,7 +177,7 @@ export default function ConfiguracaoPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Densidade de Impressão</label>
+                <Label>Densidade de Impressão</Label>
                 <div className="flex items-center gap-4">
                   <Slider
                     value={[config.darkness]}
@@ -166,10 +189,13 @@ export default function ConfiguracaoPage() {
                   />
                   <span className="w-12 text-center">{config.darkness}</span>
                 </div>
+                <p className="text-sm text-muted-foreground">
+                  Ajusta o contraste da impressão (1-15)
+                </p>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Velocidade</label>
+                <Label>Velocidade</Label>
                 <div className="flex items-center gap-4">
                   <Slider
                     value={[config.speed]}
@@ -180,6 +206,37 @@ export default function ConfiguracaoPage() {
                     className="flex-1"
                   />
                   <span className="w-12 text-center">{config.speed}</span>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Velocidade de impressão (1-4)
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Largura (dots)</Label>
+                  <Input
+                    type="number"
+                    value={config.width}
+                    onChange={(e) => setConfig(prev => ({ ...prev, width: parseInt(e.target.value) || 0 }))}
+                    min={0}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    8 dots = 1mm
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Altura (dots)</Label>
+                  <Input
+                    type="number"
+                    value={config.height}
+                    onChange={(e) => setConfig(prev => ({ ...prev, height: parseInt(e.target.value) || 0 }))}
+                    min={0}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    8 dots = 1mm
+                  </p>
                 </div>
               </div>
 
@@ -198,9 +255,9 @@ export default function ConfiguracaoPage() {
           <Card>
             <CardHeader>
               <CardTitle>Teste de Impressão</CardTitle>
-              <CardDescription>Imprima uma etiqueta de teste</CardDescription>
+              <CardDescription>Imprima uma etiqueta de teste para verificar as configurações</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <Button 
                 onClick={testPrint}
                 disabled={printers.length === 0}
@@ -209,6 +266,14 @@ export default function ConfiguracaoPage() {
                 <Printer className="mr-2 h-4 w-4" />
                 Imprimir Teste
               </Button>
+
+              {debugInfo && (
+                <Card className="bg-muted">
+                  <CardContent className="p-4">
+                    <pre className="text-sm whitespace-pre-wrap">{debugInfo}</pre>
+                  </CardContent>
+                </Card>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

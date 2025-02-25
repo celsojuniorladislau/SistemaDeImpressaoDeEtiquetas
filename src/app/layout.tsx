@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { Sidebar } from '@/components/sidebar'
 import { UpdateChecker } from '@/components/Update-checker'
-import { Toaster } from '@/components/ui/toaster'
+import { Toaster } from 'sonner'
 import React from 'react'; // Added import for React
 
 const inter = Inter({ subsets: ['latin'] })

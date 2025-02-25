@@ -5,12 +5,14 @@ import { invoke } from "@tauri-apps/api/tauri"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Pencil, Trash2, Search, Plus } from "lucide-react"
+import { Pencil, Trash2, Search, Plus } from 'lucide-react'
 import { ProductForm } from "@/components/product-form"
+import { toast } from "sonner"
 
 interface Product {
   id: number
-  code: string
+  product_code: string
+  barcode: string
   name: string
   name_short: string
 }
@@ -30,6 +32,9 @@ export default function ProductsPage() {
       setProducts(data)
     } catch (error) {
       console.error("Erro ao carregar produtos:", error)
+      toast.error("Erro ao carregar produtos", {
+        description: String(error)
+      })
     } finally {
       setLoading(false)
     }
@@ -40,16 +45,21 @@ export default function ProductsPage() {
 
     try {
       await invoke("delete_product", { id })
+      toast.success("Produto excluído com sucesso")
       await loadProducts()
     } catch (error) {
       console.error("Erro ao excluir produto:", error)
+      toast.error("Erro ao excluir produto", {
+        description: String(error)
+      })
     }
   }
 
   const filteredProducts = products.filter(
     (product) =>
       product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      product.barcode.toLowerCase().includes(searchTerm.toLowerCase()) ||
       product.name_short.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
@@ -64,7 +74,7 @@ export default function ProductsPage() {
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Produtos Cadatrados</h1>
+        <h1 className="text-2xl font-bold">Produtos Cadastrados</h1>
         <ProductForm
           onSubmitSuccess={loadProducts}
           trigger={
@@ -81,7 +91,7 @@ export default function ProductsPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Buscar por código ou nome..."
+            placeholder="Buscar por código, código de barras ou nome..."
             className="pl-8"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -93,7 +103,8 @@ export default function ProductsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Código</TableHead>
+              <TableHead>Código do Produto</TableHead>
+              <TableHead>Código de Barras</TableHead>
               <TableHead>Nome</TableHead>
               <TableHead>Nome Abreviado</TableHead>
               <TableHead className="w-[100px]">Ações</TableHead>
@@ -103,7 +114,8 @@ export default function ProductsPage() {
             {filteredProducts.length > 0 ? (
               filteredProducts.map((product) => (
                 <TableRow key={product.id}>
-                  <TableCell className="font-medium">{product.code}</TableCell>
+                  <TableCell className="font-medium">{product.product_code}</TableCell>
+                  <TableCell className="font-mono">{product.barcode}</TableCell>
                   <TableCell>{product.name}</TableCell>
                   <TableCell>{product.name_short}</TableCell>
                   <TableCell>
@@ -117,7 +129,11 @@ export default function ProductsPage() {
                           </Button>
                         }
                       />
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(product.id)}>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleDelete(product.id)}
+                      >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -126,7 +142,7 @@ export default function ProductsPage() {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-6">
+                <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
                   {searchTerm ? "Nenhum produto encontrado" : "Nenhum produto cadastrado"}
                 </TableCell>
               </TableRow>
@@ -137,4 +153,3 @@ export default function ProductsPage() {
     </div>
   )
 }
-

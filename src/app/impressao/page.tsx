@@ -18,13 +18,14 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "@/components/ui/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { PrintPreview } from "@/components/print-preview"
 
 // Interfaces
 interface Product {
   id?: number
   name: string
-  name_short: string
-  code: string
+  barcode: string
+  product_code: string
   description?: string
   created_at?: string
   updated_at?: string
@@ -130,54 +131,67 @@ export default function ImpressaoPage() {
   // Funções de manipulação
   const handlePrintSelected = async () => {
     if (!printerConfig) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Configure a impressora antes de imprimir.",
-      })
-      return
+        toast({
+            variant: "destructive",
+            title: "Erro",
+            description: "Configure a impressora antes de imprimir.",
+        })
+        return
     }
 
     setLoading(true)
     try {
-      let totalPrinted = 0
-      const totalToPrint = Object.values(selectedProducts).reduce((acc, product) => acc + product.quantity, 0)
+        let totalPrinted = 0
+        const totalToPrint = Object.values(selectedProducts).reduce((acc, product) => acc + product.quantity, 0)
 
-      for (const productId in selectedProducts) {
-        const product = selectedProducts[productId]
-        for (let i = 0; i < product.quantity; i++) {
-          await invoke('print_label', { product })
-          totalPrinted++
-          
-          // Atualiza o progresso
-          toast({
-            title: "Imprimindo...",
-            description: `Etiqueta ${totalPrinted} de ${totalToPrint}`,
-          })
-          
-          // Espera 1 segundo entre impressões
-          await new Promise(resolve => setTimeout(resolve, 1000))
+        // Agrupa as etiquetas em conjuntos de 3
+        const printQueue: (Product | null)[] = []
+        for (const productId in selectedProducts) {
+            const product = selectedProducts[productId]
+            for (let i = 0; i < product.quantity; i++) {
+                printQueue.push(product)
+            }
         }
-      }
-      
-      toast({
-        title: "Sucesso",
-        description: `${totalPrinted} etiqueta(s) impressa(s) com sucesso!`,
-      })
-      
-      await loadPrintHistory()
-      setSelectedProducts({})
+
+        // Imprime em grupos de 3
+        for (let i = 0; i < printQueue.length; i += 3) {
+            const batch = printQueue.slice(i, i + 3)
+            // Se o batch tiver menos que 3 etiquetas, completa com null
+            while (batch.length < 3) {
+                batch.push(null)
+            }
+
+            await invoke('print_label_batch', { products: batch })
+            totalPrinted += batch.filter(p => p !== null).length
+
+            // Atualiza o progresso
+            toast({
+                title: "Imprimindo...",
+                description: `Etiqueta ${totalPrinted} de ${totalToPrint}`,
+            })
+
+            // Espera 1 segundo entre impressões
+            await new Promise(resolve => setTimeout(resolve, 1000))
+        }
+
+        toast({
+            title: "Sucesso",
+            description: `${totalPrinted} etiqueta(s) impressa(s) com sucesso!`,
+        })
+
+        await loadPrintHistory()
+        setSelectedProducts({})
     } catch (error) {
-      console.error('Erro ao imprimir:', error)
-      toast({
-        variant: "destructive",
-        title: "Erro de Impressão",
-        description: "Verifique se a impressora está conectada e configurada corretamente.",
-      })
+        console.error('Erro ao imprimir:', error)
+        toast({
+            variant: "destructive",
+            title: "Erro de Impressão",
+            description: "Verifique se a impressora está conectada e configurada corretamente.",
+        })
     } finally {
-      setLoading(false)
+        setLoading(false)
     }
-  }
+}
 
   const toggleProductSelection = (product: Product) => {
     setSelectedProducts(prev => {
@@ -201,7 +215,8 @@ export default function ImpressaoPage() {
   // Filtragem de produtos
   const filteredProducts = products.filter(product => 
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.code.toLowerCase().includes(searchTerm.toLowerCase())
+    product.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.barcode.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   const hasSelectedProducts = Object.keys(selectedProducts).length > 0
@@ -267,7 +282,7 @@ export default function ImpressaoPage() {
       <div className="relative flex-1">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
         <Input
-          placeholder="Buscar por código ou nome..."
+          placeholder="Buscar por nome, código do produto ou código de barras..."
           className="pl-8"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
@@ -283,9 +298,9 @@ export default function ImpressaoPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[50px]"></TableHead>
-                <TableHead>Código</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Nome Abreviado</TableHead>
+                <TableHead>Código do Produto</TableHead>
+                <TableHead>Codigo de Barras</TableHead>
+                <TableHead>Nome </TableHead>
                 <TableHead>Quantidade</TableHead>
                 <TableHead className="text-right">Selecionar</TableHead>
               </TableRow>
@@ -306,9 +321,9 @@ export default function ImpressaoPage() {
                         onCheckedChange={() => toggleProductSelection(product)}
                       />
                     </TableCell>
-                    <TableCell>{product.code}</TableCell>
+                    <TableCell>{product.product_code}</TableCell>
+                    <TableCell>{product.barcode}</TableCell>
                     <TableCell>{product.name}</TableCell>
-                    <TableCell>{product.name_short}</TableCell>
                     <TableCell>
                       {selectedProducts[product.id!] && (
                         <Input

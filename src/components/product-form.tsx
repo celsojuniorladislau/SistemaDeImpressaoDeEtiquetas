@@ -15,13 +15,14 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { invoke } from "@tauri-apps/api/tauri"
-import { toast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 
 interface Product {
   id?: number
+  product_code: string
   name: string
   name_short: string
-  code: string
+  barcode: string
   description?: string
   created_at?: string
   updated_at?: string
@@ -36,9 +37,10 @@ interface ProductFormProps {
 export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductFormProps) {
   const [open, setOpen] = useState(false)
   const [product, setProduct] = useState<Product>({
+    product_code: "",
     name: "",
     name_short: "",
-    code: "", // Será gerado automaticamente
+    barcode: "",
     description: "",
   })
   const isEditing = !!productId
@@ -51,10 +53,8 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
         })
         .catch((error) => {
           console.error("Erro ao carregar produto:", error)
-          toast({
-            variant: "destructive",
-            title: "Erro",
-            description: "Não foi possível carregar os dados do produto.",
+          toast.error("Erro ao carregar produto", {
+            description: String(error)
           })
         })
     }
@@ -73,26 +73,16 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const productData = {
-        name: product.name,
-        name_short: product.name_short,
-        code: product.code, // No modo de criação, será ignorado e gerado pelo backend
-        description: product.description,
-      }
-
       if (isEditing) {
-        await invoke("update_product", { id: productId, product: productData })
-        toast({
-          title: "Sucesso",
-          description: "Produto atualizado com sucesso.",
-        })
+        const updatedProduct = await invoke<Product>("update_product", { 
+          id: productId, 
+          product 
+        });
+        toast.success("Produto atualizado com sucesso")
+        setProduct(updatedProduct); // Atualiza o formulário com os dados retornados
       } else {
-        // O backend retornará o produto com o código gerado
-        const savedProduct = await invoke<Product>("create_product", { product: productData })
-        toast({
-          title: "Sucesso",
-          description: `Produto criado com sucesso. Código de barras: ${savedProduct.code}`,
-        })
+        const newProduct = await invoke<Product>("create_product", { product })
+        toast.success("Produto criado com sucesso")
       }
 
       setOpen(false)
@@ -100,18 +90,17 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
 
       if (!isEditing) {
         setProduct({
+          product_code: "",
           name: "",
           name_short: "",
-          code: "",
+          barcode: "",
           description: "",
         })
       }
     } catch (error) {
-      console.error("Erro ao salvar produto:", error)
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Ocorreu um erro ao salvar o produto.",
+      console.error("Erro:", error);
+      toast.error(isEditing ? "Erro ao atualizar produto" : "Erro ao criar produto", {
+        description: String(error)
       })
     }
   }
@@ -130,9 +119,7 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
         <DialogHeader>
           <DialogTitle>{isEditing ? "Editar" : "Novo"} Produto</DialogTitle>
           <DialogDescription>
-            {isEditing 
-              ? "Edite os dados do produto. Clique em salvar quando terminar."
-              : "Preencha os dados do produto. O código de barras será gerado automaticamente."}
+            Preencha os dados do produto. O código de barras será gerado automaticamente.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -171,13 +158,25 @@ export function ProductForm({ onSubmitSuccess, trigger, productId }: ProductForm
               </p>
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="product_code">Código do Produto</Label>
+              <Input
+                id="product_code"
+                name="product_code"
+                value={product.product_code}
+                onChange={handleChange}
+                placeholder="Digite o código do produto"
+                required
+              />
+            </div>
+
             {isEditing && (
               <div className="space-y-2">
-                <Label htmlFor="code">Código de Barras</Label>
+                <Label htmlFor="barcode">Código de Barras</Label>
                 <Input
-                  id="code"
-                  name="code"
-                  value={product.code}
+                  id="barcode"
+                  name="barcode"
+                  value={product.barcode}
                   readOnly
                   className="bg-muted"
                 />

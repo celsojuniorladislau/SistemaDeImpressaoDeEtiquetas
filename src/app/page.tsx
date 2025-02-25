@@ -7,6 +7,8 @@ import { Package2, Printer, History } from "lucide-react"
 import { invoke } from "@tauri-apps/api/tauri"
 import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
+import { checkUpdate, installUpdate } from "@tauri-apps/api/updater"
+import { relaunch } from "@tauri-apps/api/process"
 
 interface Stats {
   totalProducts: number
@@ -59,6 +61,27 @@ export default function HomePage() {
     }
   }
 
+  async function verificarAtualizacao() {
+    try {
+      const update = await checkUpdate();
+  
+      if (update.shouldUpdate) {
+        console.log(`Nova versão disponível: ${update.manifest?.version}`);
+        await installUpdate();
+        await relaunch(); // Reinicia o app após a atualização
+      } else {
+        console.log("Nenhuma atualização disponível.");
+      }
+    } catch (error) {
+      console.error("Erro ao verificar atualização:", error);
+    }
+  }
+
+  // ✅ Rodar a verificação automática quando o app abrir
+   useEffect(() => {
+    verificarAtualizacao();
+  }, []);
+  
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
@@ -66,7 +89,7 @@ export default function HomePage() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-white">
+        <Card className="dashboard-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Total de Produtos</CardTitle>
             <Package2 className="h-4 w-4 text-muted-foreground" />
@@ -83,7 +106,7 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white">
+        <Card className="dashboard-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium">Etiquetas Impressas</CardTitle>
             <Printer className="h-4 w-4 text-muted-foreground" />
@@ -102,7 +125,7 @@ export default function HomePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="bg-white lg:col-span-1">
+        <Card className="dashboard-card">
           <CardHeader>
             <CardTitle>Ações Rápidas</CardTitle>
           </CardHeader>
@@ -159,7 +182,7 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white lg:col-span-1">
+        <Card className="dashboard-card">
           <CardHeader>
             <CardTitle>Últimas Impressões</CardTitle>
           </CardHeader>
@@ -185,7 +208,7 @@ export default function HomePage() {
           </CardContent>
         </Card>
 
-        <Card className="bg-white lg:col-span-1">
+        <Card className="dashboard-card">
           <CardHeader>
             <CardTitle>Produtos Recentes</CardTitle>
           </CardHeader>
