@@ -1,4 +1,4 @@
-'use client'
+"use client"
 
 import { useEffect, useState, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/tauri'
@@ -12,13 +12,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Printer, Search, AlertCircle, Loader2 } from 'lucide-react'
+import { Printer, Search, AlertCircle, Loader2, Eye } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "@/components/ui/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { PrintPreview } from "@/components/print-preview"
+//import { PrintPreview } from "@/components/print-preview"
 
 // Interfaces
 interface Product {
@@ -26,6 +26,7 @@ interface Product {
   name: string
   barcode: string
   product_code: string
+  name_short: string // Adicionado para compatibilidade com PrintPreview
   description?: string
   created_at?: string
   updated_at?: string
@@ -62,6 +63,7 @@ export default function ImpressaoPage() {
   const [printerConfig, setPrinterConfig] = useState<PrinterConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [showPreview, setShowPreview] = useState(false) // Novo estado para controlar a visibilidade do preview
 
   // Funções de carregamento
   const loadPrinterConfig = useCallback(async () => {
@@ -191,7 +193,7 @@ export default function ImpressaoPage() {
     } finally {
         setLoading(false)
     }
-}
+  }
 
   const toggleProductSelection = (product: Product) => {
     setSelectedProducts(prev => {
@@ -221,6 +223,26 @@ export default function ImpressaoPage() {
 
   const hasSelectedProducts = Object.keys(selectedProducts).length > 0
   const totalEtiquetas = Object.values(selectedProducts).reduce((acc, product) => acc + product.quantity, 0)
+
+  // Preparar dados para o preview
+  const previewData = () => {
+    const printQueue: (Product | null)[] = []
+    for (const productId in selectedProducts) {
+      const product = selectedProducts[productId]
+      for (let i = 0; i < product.quantity; i++) {
+        printQueue.push(product)
+      }
+    }
+    
+    // Pegar apenas o primeiro conjunto de 3 etiquetas para o preview
+    const firstBatch = printQueue.slice(0, 3)
+    // Completar com null se necessário
+    while (firstBatch.length < 3) {
+      firstBatch.push(null)
+    }
+    
+    return firstBatch
+  }
 
   if (initialLoading) {
     return (
@@ -260,24 +282,52 @@ export default function ImpressaoPage() {
             </Badge>
           )}
         </div>
-        <Button
-          onClick={handlePrintSelected}
-          className="transition-opacity duration-300"
-          disabled={!hasSelectedProducts || loading || !printerConfig}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Imprimindo...
-            </>
-          ) : (
-            <>
-              <Printer className="h-4 w-4 mr-2" />
-              Imprimir Selecionados
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setShowPreview(!showPreview)}
+            disabled={!hasSelectedProducts}
+            className="transition-opacity duration-300"
+          >
+            <Eye className="h-4 w-4 mr-2" />
+            {showPreview ? "Ocultar Preview" : "Ver Preview"}
+          </Button>
+          <Button
+            onClick={handlePrintSelected}
+            className="transition-opacity duration-300"
+            disabled={!hasSelectedProducts || loading || !printerConfig}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Imprimindo...
+              </>
+            ) : (
+              <>
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir Selecionados
+              </>
+            )}
+          </Button>
+        </div>
       </div>
+
+      {/* Preview das etiquetas */}
+      {showPreview && hasSelectedProducts && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Preview das Etiquetas</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PrintPreview products={previewData()} />
+            {totalEtiquetas > 3 && (
+              <p className="text-sm text-muted-foreground mt-4 text-center">
+                Mostrando preview das primeiras 3 etiquetas de um total de {totalEtiquetas}.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="relative flex-1">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />

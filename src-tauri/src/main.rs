@@ -346,14 +346,23 @@ fn validate_product_code(product_code: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn is_product_code_unique(conn: &Connection, product_code: &str) -> Result<bool, String> {
-    let count: i32 = conn
-        .query_row(
-            "SELECT COUNT(*) FROM products WHERE product_code = ?",
-            params![product_code],
-            |row| row.get(0),
-        )
-        .map_err(|e| e.to_string())?;
+fn is_product_code_unique(conn: &Connection, product_code: &str, exclude_id: Option<i64>) -> Result<bool, String> {
+    let count: i32 = match exclude_id {
+        Some(id) => conn
+            .query_row(
+                "SELECT COUNT(*) FROM products WHERE product_code = ? AND id != ?",
+                params![product_code, id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?,
+        None => conn
+            .query_row(
+                "SELECT COUNT(*) FROM products WHERE product_code = ?",
+                params![product_code],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?,
+    };
 
     Ok(count == 0)
 }
@@ -366,7 +375,7 @@ fn create_product(mut product: Product, db: State<DbConnection>) -> Result<Produ
     let mut conn = db.0.lock().unwrap();
 
     // Verificar se o código do produto já existe
-    if !is_product_code_unique(&conn, &product.product_code)? {
+    if !is_product_code_unique(&conn, &product.product_code, None)? {
         return Err("Código do produto já existe".to_string());
     }
     
@@ -487,7 +496,7 @@ fn update_product(id: i64, mut product: Product, db: State<DbConnection>) -> Res
     let existing_product = existing_product.ok_or("Produto não encontrado")?;
     
     // Verificar se o código do produto já existe (excluindo o próprio produto)
-    if !is_product_code_unique(&conn, &product.product_code)? {
+    if !is_product_code_unique(&conn, &product.product_code, Some(id))? {
         return Err("Já existe outro produto cadastrado com este código".to_string());
     }
 

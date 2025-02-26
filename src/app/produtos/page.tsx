@@ -5,9 +5,19 @@ import { invoke } from "@tauri-apps/api/tauri"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Pencil, Trash2, Search, Plus } from 'lucide-react'
+import { Pencil, Trash2, Search, Plus, AlertTriangle } from 'lucide-react'
 import { ProductForm } from "@/components/product-form"
 import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 
 interface Product {
   id: number
@@ -21,6 +31,8 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [productToDelete, setProductToDelete] = useState<number | null>(null)
 
   useEffect(() => {
     loadProducts()
@@ -40,11 +52,16 @@ export default function ProductsPage() {
     }
   }
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("Deseja realmente excluir este produto?")) return
+  const confirmDelete = (id: number) => {
+    setProductToDelete(id)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleDelete = async () => {
+    if (productToDelete === null) return
 
     try {
-      await invoke("delete_product", { id })
+      await invoke("delete_product", { id: productToDelete })
       toast.success("Produto excluído com sucesso")
       await loadProducts()
     } catch (error) {
@@ -52,6 +69,9 @@ export default function ProductsPage() {
       toast.error("Erro ao excluir produto", {
         description: String(error)
       })
+    } finally {
+      setProductToDelete(null)
+      setDeleteDialogOpen(false)
     }
   }
 
@@ -132,7 +152,7 @@ export default function ProductsPage() {
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => handleDelete(product.id)}
+                        onClick={() => confirmDelete(product.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -150,6 +170,30 @@ export default function ProductsPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Diálogo de confirmação de exclusão */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Confirmar exclusão
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este produto? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

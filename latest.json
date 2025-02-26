@@ -1,11 +1,11 @@
 {
-  "version": "1.0.8",
-  "notes":"Correção de bugs e melhorias de design",
-  "pub_date": "2024-02-24",
+  "version": "1.0.9",
+  "notes":"Correção de edição e exclusão de produtos",
+  "pub_date": "2024-02-25",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSbE1MU1FrQTVNdjhjc3QyWmZhMTZHNFA5Yzl1YmF5VzNieXFxMUZJdEZyN214MlZjMDBWQWFhZW9WdWtZWWJHNjdQb1owM21NQzhHL1lKcUk5WTcwWnZmUE1UMnNiYVFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQwNDQ4ODUyCWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjhfeDY0LXNldHVwLm5zaXMuemlwCnlFckhtK2pIWUpTOSt5QkVCMDFPbW14Rk1XUmdwZ2l4YUhiWXBYdjZuSEVSSnVvaC95dEYrbnFwa2dMTDJhem80TU51Um1MOHEyVFlLazN0NysxS0NBPT0K",
-      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.8/Sistema.de.Etiquetas_1.0.8_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSbE1MU1FrQTVNdnhlaGxNTjg2aGVoc29CL3BZM0xMYXUyK2hQSU4zbDRnUG1PMDZxcFpQYjFKZlk0SXlaT284TDgyQkxtMEFKWXk1V3RVdEYzZ2VPMi8xVG5Gb3RaSHc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQwNTM3OTc3CWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjlfeDY0LXNldHVwLm5zaXMuemlwClRPU040ekVKdHpMSmw0UEl4QnFwTHkrL0lFdXN2cHAzVFFrbjJ1bXkzSW1SQ20rZ2c5ekM0WUV0SWhKeG45QVdWaXdVWElNa25yNSs3YmdhalpOekNRPT0K",
+      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.9/Sistema.de.Etiquetas_1.0.9_x64-setup.exe"
     }
   }
 }
