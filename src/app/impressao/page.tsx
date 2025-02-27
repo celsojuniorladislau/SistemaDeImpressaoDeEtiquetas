@@ -1,4 +1,4 @@
-"use client"
+'use client'
 
 import { useEffect, useState, useCallback } from 'react'
 import { invoke } from '@tauri-apps/api/tauri'
@@ -12,21 +12,22 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Printer, Search, AlertCircle, Loader2, Eye } from 'lucide-react'
+import { Printer, Search, AlertCircle, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "@/components/ui/use-toast"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 //import { PrintPreview } from "@/components/print-preview"
+import { LabelPreviewDialog } from "@/components/LabelPreviewDialog"
 
 // Interfaces
 interface Product {
   id?: number
   name: string
+  name_short: string
   barcode: string
   product_code: string
-  name_short: string // Adicionado para compatibilidade com PrintPreview
   description?: string
   created_at?: string
   updated_at?: string
@@ -63,7 +64,29 @@ export default function ImpressaoPage() {
   const [printerConfig, setPrinterConfig] = useState<PrinterConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
-  const [showPreview, setShowPreview] = useState(false) // Novo estado para controlar a visibilidade do preview
+
+  // Adicione esta função para preparar os dados do preview
+  const previewData = () => {
+    const printQueue: (Product | null)[] = []
+    
+    // Adiciona produtos selecionados à fila
+    for (const productId in selectedProducts) {
+      const product = selectedProducts[productId]
+      for (let i = 0; i < product.quantity; i++) {
+        printQueue.push(product)
+      }
+    }
+
+    // Pega apenas as primeiras 3 etiquetas
+    const firstBatch = printQueue.slice(0, 3)
+    
+    // Completa com null se tiver menos que 3 etiquetas
+    while (firstBatch.length < 3) {
+      firstBatch.push(null)
+    }
+    
+    return firstBatch
+  }
 
   // Funções de carregamento
   const loadPrinterConfig = useCallback(async () => {
@@ -193,7 +216,7 @@ export default function ImpressaoPage() {
     } finally {
         setLoading(false)
     }
-  }
+}
 
   const toggleProductSelection = (product: Product) => {
     setSelectedProducts(prev => {
@@ -224,26 +247,6 @@ export default function ImpressaoPage() {
   const hasSelectedProducts = Object.keys(selectedProducts).length > 0
   const totalEtiquetas = Object.values(selectedProducts).reduce((acc, product) => acc + product.quantity, 0)
 
-  // Preparar dados para o preview
-  const previewData = () => {
-    const printQueue: (Product | null)[] = []
-    for (const productId in selectedProducts) {
-      const product = selectedProducts[productId]
-      for (let i = 0; i < product.quantity; i++) {
-        printQueue.push(product)
-      }
-    }
-    
-    // Pegar apenas o primeiro conjunto de 3 etiquetas para o preview
-    const firstBatch = printQueue.slice(0, 3)
-    // Completar com null se necessário
-    while (firstBatch.length < 3) {
-      firstBatch.push(null)
-    }
-    
-    return firstBatch
-  }
-
   if (initialLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -256,198 +259,178 @@ export default function ImpressaoPage() {
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6">
-      {!printerConfig && (
-        <Alert variant="default">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="flex items-center gap-2">
-            Impressora não configurada. 
-            <Button 
-              variant="link" 
-              className="px-2 py-0 h-auto"
-              onClick={() => window.location.href = '/configuracoes'}
-            >
-              Configurar agora
-            </Button>
-          </AlertDescription>
-        </Alert>
-      )}
+    <div className="container mx-auto p-4">
+      <div className="flex flex-col gap-6 max-w-full">
+        {!printerConfig && (
+          <Alert variant="default">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center gap-2">
+              Impressora não configurada. 
+              <Button 
+                variant="link" 
+                className="px-2 py-0 h-auto"
+                onClick={() => window.location.href = '/configuracoes'}
+              >
+                Configurar agora
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
 
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-bold">Impressão das Etiquetas</h1>
-          {hasSelectedProducts && (
-            <Badge variant="secondary">
-              {totalEtiquetas} etiqueta{totalEtiquetas > 1 ? 's' : ''} selecionada{totalEtiquetas > 1 ? 's' : ''}
-            </Badge>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowPreview(!showPreview)}
-            disabled={!hasSelectedProducts}
-            className="transition-opacity duration-300"
-          >
-            <Eye className="h-4 w-4 mr-2" />
-            {showPreview ? "Ocultar Preview" : "Ver Preview"}
-          </Button>
-          <Button
-            onClick={handlePrintSelected}
-            className="transition-opacity duration-300"
-            disabled={!hasSelectedProducts || loading || !printerConfig}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Imprimindo...
-              </>
-            ) : (
-              <>
-                <Printer className="h-4 w-4 mr-2" />
-                Imprimir Selecionados
-              </>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <h1 className="text-2xl font-bold">Impressão das Etiquetas</h1>
+            {hasSelectedProducts && (
+              <Badge variant="secondary">
+                {totalEtiquetas} etiqueta{totalEtiquetas > 1 ? 's' : ''} selecionada{totalEtiquetas > 1 ? 's' : ''}
+              </Badge>
             )}
-          </Button>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <LabelPreviewDialog
+              products={previewData()}
+              disabled={!hasSelectedProducts}
+            />
+            <Button
+              onClick={handlePrintSelected}
+              className="transition-opacity duration-300"
+              disabled={!hasSelectedProducts || loading || !printerConfig}
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Imprimindo...
+                </>
+              ) : (
+                <>
+                  <Printer className="h-4 w-4 mr-2" />
+                  Imprimir Selecionados
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
 
-      {/* Preview das etiquetas */}
-      {showPreview && hasSelectedProducts && (
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por nome, código do produto ou código de barras..."
+            className="pl-8"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
         <Card>
           <CardHeader>
-            <CardTitle>Preview das Etiquetas</CardTitle>
+            <CardTitle>Produtos</CardTitle>
           </CardHeader>
-          <CardContent>
-            <PrintPreview products={previewData()} />
-            {totalEtiquetas > 3 && (
-              <p className="text-sm text-muted-foreground mt-4 text-center">
-                Mostrando preview das primeiras 3 etiquetas de um total de {totalEtiquetas}.
-              </p>
-            )}
+          <CardContent className="max-h-[480px] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead>Código do Produto</TableHead>
+                  <TableHead>Codigo de Barras</TableHead>
+                  <TableHead>Nome </TableHead>
+                  <TableHead>Quantidade</TableHead>
+                  <TableHead className="text-right">Selecionar</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredProducts.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      Nenhum produto encontrado
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredProducts.map((product) => (
+                    <TableRow key={product.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={!!selectedProducts[product.id!]}
+                          onCheckedChange={() => toggleProductSelection(product)}
+                        />
+                      </TableCell>
+                      <TableCell>{product.product_code}</TableCell>
+                      <TableCell>{product.barcode}</TableCell>
+                      <TableCell>{product.name}</TableCell>
+                      <TableCell>
+                        {selectedProducts[product.id!] && (
+                          <Input
+                            type="number"
+                            min="1"
+                            value={selectedProducts[product.id!].quantity}
+                            onChange={(e) => updateQuantity(product.id!, parseInt(e.target.value) || 1)}
+                            className="w-20"
+                          />
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            toggleProductSelection(product)
+                            if (!selectedProducts[product.id!]) {
+                              updateQuantity(product.id!, 1)
+                            }
+                          }}
+                        >
+                          <Printer className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
-      )}
 
-      <div className="relative flex-1">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por nome, código do produto ou código de barras..."
-          className="pl-8"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
+        <Card>
+          <CardHeader>
+            <CardTitle>Histórico de Impressão</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Data</TableHead>
+                  <TableHead>Código</TableHead>
+                  <TableHead>Nome</TableHead>
+                  <TableHead className="text-right">Status</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {printHistory.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center text-muted-foreground">
+                      Nenhum histórico de impressão
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  printHistory.map((job) => (
+                    <TableRow key={job.id}>
+                      <TableCell>
+                        {new Date(job.created_at).toLocaleString()}
+                      </TableCell>
+                      <TableCell>{job.product_code}</TableCell>
+                      <TableCell>{job.product_name}</TableCell>
+                      <TableCell className="text-right">
+                        <Badge variant={job.status === 'completed' ? 'default' : 'secondary'}>
+                          {job.status === 'completed' ? 'Concluído' : job.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Produtos</CardTitle>
-        </CardHeader>
-        <CardContent className="max-h-[480px] overflow-y-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[50px]"></TableHead>
-                <TableHead>Código do Produto</TableHead>
-                <TableHead>Codigo de Barras</TableHead>
-                <TableHead>Nome </TableHead>
-                <TableHead>Quantidade</TableHead>
-                <TableHead className="text-right">Selecionar</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredProducts.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground">
-                    Nenhum produto encontrado
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredProducts.map((product) => (
-                  <TableRow key={product.id}>
-                    <TableCell>
-                      <Checkbox
-                        checked={!!selectedProducts[product.id!]}
-                        onCheckedChange={() => toggleProductSelection(product)}
-                      />
-                    </TableCell>
-                    <TableCell>{product.product_code}</TableCell>
-                    <TableCell>{product.barcode}</TableCell>
-                    <TableCell>{product.name}</TableCell>
-                    <TableCell>
-                      {selectedProducts[product.id!] && (
-                        <Input
-                          type="number"
-                          min="1"
-                          value={selectedProducts[product.id!].quantity}
-                          onChange={(e) => updateQuantity(product.id!, parseInt(e.target.value) || 1)}
-                          className="w-20"
-                        />
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => {
-                          toggleProductSelection(product)
-                          if (!selectedProducts[product.id!]) {
-                            updateQuantity(product.id!, 1)
-                          }
-                        }}
-                      >
-                        <Printer className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Histórico de Impressão</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Data</TableHead>
-                <TableHead>Código</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead className="text-right">Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {printHistory.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} className="text-center text-muted-foreground">
-                    Nenhum histórico de impressão
-                  </TableCell>
-                </TableRow>
-              ) : (
-                printHistory.map((job) => (
-                  <TableRow key={job.id}>
-                    <TableCell>
-                      {new Date(job.created_at).toLocaleString()}
-                    </TableCell>
-                    <TableCell>{job.product_code}</TableCell>
-                    <TableCell>{job.product_name}</TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant={job.status === 'completed' ? 'default' : 'secondary'}>
-                        {job.status === 'completed' ? 'Concluído' : job.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
     </div>
   )
 }
