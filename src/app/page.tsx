@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Package2, Printer, History } from "lucide-react"
+import { Package2, Printer, History } from 'lucide-react'
 import { invoke } from "@tauri-apps/api/tauri"
 import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
 import { checkUpdate, installUpdate } from "@tauri-apps/api/updater"
 import { relaunch } from "@tauri-apps/api/process"
+import { toast } from "@/components/ui/use-toast"
 
 interface Stats {
   totalProducts: number
@@ -63,24 +64,56 @@ export default function HomePage() {
 
   async function verificarAtualizacao() {
     try {
-      const update = await checkUpdate();
+      const update = await checkUpdate()
   
       if (update.shouldUpdate) {
-        console.log(`Nova versão disponível: ${update.manifest?.version}`);
-        await installUpdate();
-        await relaunch(); // Reinicia o app após a atualização
-      } else {
-        console.log("Nenhuma atualização disponível.");
+        toast({
+          title: "Nova atualização disponível!",
+          description: `Versão ${update.manifest?.version} - ${update.manifest?.body}`,
+          action: (
+            <Button 
+              variant="default" 
+              onClick={async () => {
+                try {
+                  await installUpdate()
+                  
+                  toast({
+                    title: "Atualização instalada",
+                    description: "O aplicativo será reiniciado para aplicar as atualizações.",
+                  })
+
+                  setTimeout(async () => {
+                    await relaunch()
+                  }, 2000)
+                } catch (error) {
+                  console.error('Erro ao instalar atualização:', error)
+                  toast({
+                    variant: "destructive",
+                    title: "Erro na atualização",
+                    description: "Não foi possível instalar a atualização. Tente novamente mais tarde.",
+                  })
+                }
+              }}
+            >
+              Instalar Agora
+            </Button>
+          ),
+          duration: 0, // Toast permanece até o usuário interagir
+        })
       }
     } catch (error) {
-      console.error("Erro ao verificar atualização:", error);
+      console.error("Erro ao verificar atualização:", error)
     }
   }
 
-  // ✅ Rodar a verificação automática quando o app abrir
-   useEffect(() => {
-    verificarAtualizacao();
-  }, []);
+  useEffect(() => {
+    verificarAtualizacao() // Verifica ao iniciar
+    
+    // Verifica a cada 1 hora
+    const interval = setInterval(verificarAtualizacao, 60 * 60 * 1000)
+    
+    return () => clearInterval(interval)
+  }, [])
   
   return (
     <div className="container mx-auto p-4 space-y-6">
@@ -237,4 +270,3 @@ export default function HomePage() {
     </div>
   )
 }
-
