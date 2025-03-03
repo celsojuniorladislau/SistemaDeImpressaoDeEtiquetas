@@ -9,7 +9,7 @@ import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
 import { checkUpdate, installUpdate } from "@tauri-apps/api/updater"
 import { relaunch } from "@tauri-apps/api/process"
-import { toast } from "@/components/ui/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 
 interface Stats {
   totalProducts: number
@@ -27,6 +27,19 @@ interface Stats {
   }>
 }
 
+function formatarDescricaoAtualizacao(body: string | undefined): string {
+  if (!body) return "Melhorias e correções de bugs."
+  return body.replace(/[#*_]/g, '').trim()
+}
+
+function formatarData(data: string): string {
+  return new Date(data).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  })
+}
+
 export default function HomePage() {
   const [stats, setStats] = useState<Stats>({
     totalProducts: 0,
@@ -36,6 +49,7 @@ export default function HomePage() {
   })
   const [loading, setLoading] = useState(true)
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
+  const { toast, dismiss } = useToast()
 
   useEffect(() => {
     loadStats()
@@ -58,13 +72,18 @@ export default function HomePage() {
       })
     } catch (error) {
       console.error("Erro ao carregar estatísticas:", error)
+      toast({
+        variant: "destructive",
+        title: "Erro ao carregar dados",
+        description: "Não foi possível carregar as informações do dashboard."
+      })
     } finally {
       setLoading(false)
     }
   }
 
   async function verificarAtualizacao() {
-    if (isCheckingUpdate) return // Evita verificações simultâneas
+    if (isCheckingUpdate) return
     
     setIsCheckingUpdate(true)
     try {
@@ -74,38 +93,63 @@ export default function HomePage() {
 
       if (update.shouldUpdate) {
         console.log('Nova versão disponível:', update.manifest?.version)
+        
+        const descricao = formatarDescricaoAtualizacao(update.manifest?.body)
+        
         toast({
-          title: "Nova atualização disponível!",
-          description: `Versão ${update.manifest?.version} - ${update.manifest?.body || ''}`,
+          title: "Nova versão disponível!",
+          description: (
+            <div className="mt-2 space-y-2">
+              <p>Versão {update.manifest?.version}</p>
+              <p className="text-sm text-muted-foreground">{descricao}</p>
+              <p className="text-sm">Deseja atualizar agora?</p>
+            </div>
+          ),
           action: (
-            <Button 
-              variant="default" 
-              onClick={async () => {
-                try {
-                  console.log('Iniciando instalação da atualização...')
-                  await installUpdate()
-                  console.log('Atualização instalada com sucesso')
-                  
-                  toast({
-                    title: "Atualização instalada",
-                    description: "O aplicativo será reiniciado para aplicar as atualizações.",
-                  })
+            <div className="flex gap-2 mt-2">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  dismiss()
+                }}
+              >
+                Mais tarde
+              </Button>
+              <Button 
+                variant="default"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    dismiss() // Fecha o toast anterior
+                    toast({
+                      title: "Baixando atualização...",
+                      description: "Por favor, aguarde.",
+                    })
 
-                  // Aguarda 2 segundos antes de reiniciar
-                  await new Promise(resolve => setTimeout(resolve, 2000))
-                  await relaunch()
-                } catch (error) {
-                  console.error('Erro ao instalar atualização:', error)
-                  toast({
-                    variant: "destructive",
-                    title: "Erro na atualização",
-                    description: String(error),
-                  })
-                }
-              }}
-            >
-              Instalar Agora
-            </Button>
+                    await installUpdate()
+                    
+                    toast({
+                      title: "Atualização concluída!",
+                      description: "O sistema será reiniciado para aplicar as atualizações.",
+                    })
+
+                    // Aguarda 3 segundos antes de reiniciar
+                    await new Promise(resolve => setTimeout(resolve, 3000))
+                    await relaunch()
+                  } catch (error) {
+                    console.error('Erro ao instalar atualização:', error)
+                    toast({
+                      variant: "destructive",
+                      title: "Erro na atualização",
+                      description: "Não foi possível instalar a atualização. Tente novamente mais tarde.",
+                    })
+                  }
+                }}
+              >
+                Atualizar agora
+              </Button>
+            </div>
           ),
           duration: 0, // Toast permanece até o usuário interagir
         })
@@ -256,12 +300,16 @@ export default function HomePage() {
                 {stats.recentPrints.map((print) => (
                   <div key={print.id} className="flex justify-between items-center text-sm">
                     <span className="font-medium">{print.product_name}</span>
-                    <span className="text-muted-foreground">{new Date(print.created_at).toLocaleDateString()}</span>
+                    <span className="text-muted-foreground">
+                      {formatarData(print.created_at)}
+                    </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="text-sm text-muted-foreground text-center py-8">Nenhuma impressão recente</div>
+              <div className="text-sm text-muted-foreground text-center py-8">
+                Nenhuma impressão recente
+              </div>
             )}
           </CardContent>
         </Card>
@@ -287,7 +335,9 @@ export default function HomePage() {
                 ))}
               </div>
             ) : (
-              <div className="text-sm text-muted-foreground text-center py-8">Nenhum produto recente</div>
+              <div className="text-sm text-muted-foreground text-center py-8">
+                Nenhum produto recente
+              </div>
             )}
           </CardContent>
         </Card>

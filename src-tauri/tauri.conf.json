@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "Sistema de Etiquetas",
-    "version": "1.0.15" 
+    "version": "1.0.16" 
   },
   "tauri": {
     "allowlist": {
@@ -39,7 +39,7 @@
     "updater": {
       "active": true,
       "endpoints": ["https://raw.githubusercontent.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/main/latest.json"],
-      "dialog": true,
+      "dialog": false,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJGNEMwRTkwOTBCNDMwNjUKUldSbE1MU1FrQTVNdjBXMThubG9BUTl3TmR5WEZIdUIzT1ZkbFNzTlE1bzB0QUROeWlaM1B0SnYK"
     },           
     "security": {
