@@ -1,6 +1,6 @@
 {
   "version": "1.0.11",
-  "body":"Correção na notificação de aviso de nova versão do sistema disponível",
+  "body":"Tab de versão do sistema de etiquetas na página de configurações e correção do sistema de atualização automática",
   "pub_date": "2025-03-02",
   "platforms": {
     "windows-x86_64": {

@@ -9,7 +9,8 @@ import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { Printer, RefreshCcw, Settings, AlertCircle } from 'lucide-react'
+import { Printer, RefreshCcw, Settings, AlertCircle, Info } from "lucide-react"
+import { getVersion } from "@tauri-apps/api/app"
 
 interface PrinterConfig {
   darkness: number
@@ -21,6 +22,7 @@ interface PrinterConfig {
 export default function ConfiguracaoPage() {
   const [loading, setLoading] = useState(false)
   const [printers, setPrinters] = useState<string[]>([])
+  const [version, setVersion] = useState<string>("")
   const [config, setConfig] = useState<PrinterConfig>({
     darkness: 8,
     width: 400,
@@ -38,18 +40,18 @@ export default function ConfiguracaoPage() {
 
       if (found.length === 0) {
         toast.error("Nenhuma impressora Argox encontrada", {
-          description: "Verifique se está conectada e ligada."
+          description: "Verifique se está conectada e ligada.",
         })
       } else {
         toast.success("Impressora encontrada!", {
-          description: found[0]
+          description: found[0],
         })
       }
     } catch (error) {
       console.error("Erro ao procurar impressoras:", error)
       setDebugInfo(`Erro: ${error}`)
       toast.error("Erro ao procurar impressoras", {
-        description: String(error)
+        description: String(error),
       })
     }
   }
@@ -70,7 +72,19 @@ export default function ConfiguracaoPage() {
   useEffect(() => {
     searchPrinters()
     loadSavedConfig()
-  }, [])
+
+    // Carregar versão do sistema
+    async function loadVersion() {
+      try {
+        const version = await getVersion()
+        setVersion(version)
+      } catch (error) {
+        console.error("Erro ao carregar versão:", error)
+        setDebugInfo((prev) => `${prev}\nErro ao carregar versão: ${error}`)
+      }
+    }
+    loadVersion()
+  }, []) // Removed dependencies to useEffect
 
   const connectPrinter = async () => {
     setLoading(true)
@@ -78,15 +92,15 @@ export default function ConfiguracaoPage() {
     try {
       await invoke("connect_printer", { config })
       await invoke("save_printer_settings", { config })
-      
+
       setDebugInfo("Impressora conectada e configurações salvas")
       toast.success("Impressora conectada!", {
-        description: "Configurações salvas com sucesso."
+        description: "Configurações salvas com sucesso.",
       })
     } catch (error) {
       setDebugInfo(`Erro na conexão: ${error}`)
       toast.error("Erro ao conectar impressora", {
-        description: String(error)
+        description: String(error),
       })
     } finally {
       setLoading(false)
@@ -99,12 +113,12 @@ export default function ConfiguracaoPage() {
       await invoke("print_test")
       setDebugInfo("Teste de impressão enviado com sucesso")
       toast.success("Teste enviado!", {
-        description: "Verifique a impressora"
+        description: "Verifique a impressora",
       })
     } catch (error) {
       setDebugInfo(`Erro no teste: ${error}`)
       toast.error("Erro ao imprimir teste", {
-        description: String(error)
+        description: String(error),
       })
     }
   }
@@ -115,11 +129,7 @@ export default function ConfiguracaoPage() {
         <div>
           <h1 className="text-2xl font-bold">Configuração da Impressora Argox OS-2140</h1>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={searchPrinters}
-          className="flex items-center gap-2"
-        >
+        <Button variant="outline" onClick={searchPrinters} className="flex items-center gap-2">
           <RefreshCcw className="h-4 w-4" />
           Procurar Impressora
         </Button>
@@ -132,9 +142,7 @@ export default function ConfiguracaoPage() {
               <Printer className="h-5 w-5 text-green-500" />
               <CardTitle>Impressora Encontrada</CardTitle>
             </div>
-            <CardDescription>
-              {printers.join(", ")}
-            </CardDescription>
+            <CardDescription>{printers.join(", ")}</CardDescription>
           </CardHeader>
         </Card>
       ) : (
@@ -167,6 +175,10 @@ export default function ConfiguracaoPage() {
             <Printer className="h-4 w-4" />
             Teste
           </TabsTrigger>
+          <TabsTrigger value="system" className="flex items-center gap-2">
+            <Info className="h-4 w-4" />
+            Sistema
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="settings">
@@ -181,7 +193,7 @@ export default function ConfiguracaoPage() {
                 <div className="flex items-center gap-4">
                   <Slider
                     value={[config.darkness]}
-                    onValueChange={(value) => setConfig(prev => ({ ...prev, darkness: value[0] }))}
+                    onValueChange={(value) => setConfig((prev) => ({ ...prev, darkness: value[0] }))}
                     min={1}
                     max={15}
                     step={1}
@@ -189,9 +201,7 @@ export default function ConfiguracaoPage() {
                   />
                   <span className="w-12 text-center">{config.darkness}</span>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Ajusta o contraste da impressão (1-15)
-                </p>
+                <p className="text-sm text-muted-foreground">Ajusta o contraste da impressão (1-15)</p>
               </div>
 
               <div className="space-y-2">
@@ -199,7 +209,7 @@ export default function ConfiguracaoPage() {
                 <div className="flex items-center gap-4">
                   <Slider
                     value={[config.speed]}
-                    onValueChange={(value) => setConfig(prev => ({ ...prev, speed: value[0] }))}
+                    onValueChange={(value) => setConfig((prev) => ({ ...prev, speed: value[0] }))}
                     min={1}
                     max={4}
                     step={1}
@@ -207,9 +217,7 @@ export default function ConfiguracaoPage() {
                   />
                   <span className="w-12 text-center">{config.speed}</span>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Velocidade de impressão (1-4)
-                </p>
+                <p className="text-sm text-muted-foreground">Velocidade de impressão (1-4)</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -218,12 +226,10 @@ export default function ConfiguracaoPage() {
                   <Input
                     type="number"
                     value={config.width}
-                    onChange={(e) => setConfig(prev => ({ ...prev, width: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, width: Number.parseInt(e.target.value) || 0 }))}
                     min={0}
                   />
-                  <p className="text-sm text-muted-foreground">
-                    8 dots = 1mm
-                  </p>
+                  <p className="text-sm text-muted-foreground">8 dots = 1mm</p>
                 </div>
 
                 <div className="space-y-2">
@@ -231,20 +237,14 @@ export default function ConfiguracaoPage() {
                   <Input
                     type="number"
                     value={config.height}
-                    onChange={(e) => setConfig(prev => ({ ...prev, height: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) => setConfig((prev) => ({ ...prev, height: Number.parseInt(e.target.value) || 0 }))}
                     min={0}
                   />
-                  <p className="text-sm text-muted-foreground">
-                    8 dots = 1mm
-                  </p>
+                  <p className="text-sm text-muted-foreground">8 dots = 1mm</p>
                 </div>
               </div>
 
-              <Button 
-                onClick={connectPrinter} 
-                disabled={loading || printers.length === 0}
-                className="w-full"
-              >
+              <Button onClick={connectPrinter} disabled={loading || printers.length === 0} className="w-full">
                 {loading ? "Conectando..." : "Conectar e Salvar"}
               </Button>
             </CardContent>
@@ -258,11 +258,7 @@ export default function ConfiguracaoPage() {
               <CardDescription>Imprima uma etiqueta de teste para verificar as configurações</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button 
-                onClick={testPrint}
-                disabled={printers.length === 0}
-                className="w-full"
-              >
+              <Button onClick={testPrint} disabled={printers.length === 0} className="w-full">
                 <Printer className="mr-2 h-4 w-4" />
                 Imprimir Teste
               </Button>
@@ -277,7 +273,35 @@ export default function ConfiguracaoPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="system">
+          <Card>
+            <CardHeader>
+              <CardTitle>Informações do Sistema</CardTitle>
+              <CardDescription>Detalhes sobre a versão e configuração do sistema</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4">
+                <div className="flex items-center justify-between border-b pb-2">
+                  <span className="text-sm text-muted-foreground">Versão do Sistema</span>
+                  <span className="font-medium">{version || "Carregando..."}</span>
+                </div>
+                <div className="flex items-center justify-between border-b pb-2">
+                  <span className="text-sm text-muted-foreground">Status da Impressora</span>
+                  <span className={`font-medium ${printers.length > 0 ? "text-green-500" : "text-destructive"}`}>
+                    {printers.length > 0 ? "Conectada" : "Desconectada"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Impressora Detectada</span>
+                  <span className="font-medium">{printers[0] || "Nenhuma"}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   )
 }
+
