@@ -22,11 +22,6 @@ const menuItems = [
     icon: Printer
   },
   {
-    title: "Etiquetas",
-    href: "/etiquetas",
-    icon: Tags
-  },
-  {
     title: "Configurações",
     href: "/configuracoes",
     icon: Settings

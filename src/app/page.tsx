@@ -210,7 +210,7 @@ export default function HomePage() {
 
         <Card className="dashboard-card">
           <CardHeader>
-            <CardTitle>Produtos Recentes</CardTitle>
+            <CardTitle>Produtos Recém Cadastrados</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
