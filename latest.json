@@ -1,6 +1,6 @@
 {
-  "version": "1.0.12",
-  "body":"Tab de versão do sistema de etiquetas na página de configurações e correção do sistema de atualização automática",
+  "version": "1.0.13",
+  "body":"Correção do arquivo latest.json",
   "pub_date": "2025-03-02",
   "platforms": {
     "windows-x86_64": {
