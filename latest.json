@@ -1,11 +1,11 @@
 {
-  "version": "1.0.18",
-  "body": "Correção de bugs e melhorias em relação a atualização automática.",
-  "pub_date": "2024-03-03T14:35:30.781Z",
+  "version": "1.0.19",
+  "body": "Correção de bugs",
+  "pub_date": "2024-03-03T14:56:30.781Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ0U2S0dDaU52TEF3azM2dUM4Uml1bVFySUYvaXZGeVljaWVLN25DVHdXd0ZZakNOSDJpNkVIQ2FJRGVRWDBVL0hTc3ZlUGh6WURVdGlvY1NVM0xQUml4dDJWSkVBSXcwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQxMDIwNDE0CWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjE4X3g2NC1zZXR1cC5uc2lzLnppcApnYmE4MDF5SGFueUdvZ25Ca25FTmRwcW1hYW9SUVBOUjBMalpIVFZ4L2JVMEVoeGpCN0hwWXhBeC8rNGhOdnZyRERJbEFyQnJ1VWxYRW9TaTVpSmNCdz09Cg==",
-      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.18/Sistema.de.Etiquetas_1.0.18_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ0U2S0dDaU52TEZhZWhDbWdicjFmbEhvenJyeGRBZ0pwMVBwcTZaWURaMDVRN29wMG9vVk5OTHhmcEc1ODN3UHgzKy9mTm1WYUlvb3lHVHZ2NXB0bWkwSytRV0o0aUE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQxMDIxMTQ1CWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjE5X3g2NC1zZXR1cC5uc2lzLnppcApibS9SM3hMK0lDVXJhWnViazVmV3RnQXM2Zjl2ekNEY0x2UFRkSkYvTFJUVEx4Y091Y3lyME9QOTQ5NHdQRFdOM3JrSHUvWUhUTGN0dmZBUFk2d2hCQT09Cg==",
+      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.19/Sistema.de.Etiquetas_1.0.19_x64-setup.exe"
     }
   }
 }

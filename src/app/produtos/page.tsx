@@ -86,7 +86,7 @@ export default function ProductsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-pulse">Carregando...</div>
+        <div className="animate-pulse">Carregando ...</div>
       </div>
     )
   }
