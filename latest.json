@@ -4,8 +4,8 @@
   "pub_date": "2025-03-02",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSbE1MU1FrQTVNdjMva0RDVjVtd0tXODV1d2pnWGN5dUJZdEtpTVhBRndrMk9GeFN6Q2xCdE5TbTgyS0dhZTlSUW9BMks2VDNuSUt3ay8wQXFxWkpuQWl2NlN6TmQ0OFFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQwOTY4MDY3CWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjExX3g2NC1zZXR1cC5uc2lzLnppcAplVkwvSERkbGhZMjNIOTNqKzEyRjBnZy9aMGtJMkRQd3hSeVRBV1NsU3hDMnZkbnZOaDBsVVVYY240ZjVJM0VjdVdITnRkMkhzZE1YQWRhdjBrcFRCQT09Cg==",
-      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.11/Sistema.de.Etiquetas_1.0.11_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVSbE1MU1FrQTVNdnpPSDh4VzVabzIvMVc1U0grSHdoeXN6OW4yS3pXWkhvUWdGWTVGN2U0SWlQc1pyOGpRSzFmOUR5SWYyeFBHMDQ0bGtSdHJnRDVWSFZONzdNSDhjbmdVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQwOTY5ODk4CWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjEyX3g2NC1zZXR1cC5uc2lzLnppcApsK3dWNi9WWTllRXExeURVazFaTDRrTDhybGFtenp4QVJpbXdidGFFeWhnVzlSU3JwUTU3Vm96OFhKUFc0KytFcVRkcXdWS1N6NzVuMUVCb1plM2FDQT09Cg==",
+      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.13/Sistema.de.Etiquetas_1.0.13_x64-setup.exe"
     }
   }
 }
