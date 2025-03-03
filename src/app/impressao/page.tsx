@@ -335,7 +335,7 @@ export default function ImpressaoPage() {
                   className="h-7 px-2 flex items-center gap-2 border border-input hover:border-accent rounded-md transition-colors"
                 >
                   <CheckSquare className="h-4 w-4" />
-                  Desmarcar Todos
+                  Desmarcar todos
                 </Button>
               )}
             </div>

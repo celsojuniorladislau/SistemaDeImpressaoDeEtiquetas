@@ -35,6 +35,7 @@ export default function HomePage() {
     recentProducts: [],
   })
   const [loading, setLoading] = useState(true)
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false)
 
   useEffect(() => {
     loadStats()
@@ -63,34 +64,42 @@ export default function HomePage() {
   }
 
   async function verificarAtualizacao() {
+    if (isCheckingUpdate) return // Evita verificações simultâneas
+    
+    setIsCheckingUpdate(true)
     try {
+      console.log('Iniciando verificação de atualização...')
       const update = await checkUpdate()
-  
+      console.log('Resultado da verificação:', update)
+
       if (update.shouldUpdate) {
+        console.log('Nova versão disponível:', update.manifest?.version)
         toast({
           title: "Nova atualização disponível!",
-          description: `Versão ${update.manifest?.version} - ${update.manifest?.body}`,
+          description: `Versão ${update.manifest?.version} - ${update.manifest?.body || ''}`,
           action: (
             <Button 
               variant="default" 
               onClick={async () => {
                 try {
+                  console.log('Iniciando instalação da atualização...')
                   await installUpdate()
+                  console.log('Atualização instalada com sucesso')
                   
                   toast({
                     title: "Atualização instalada",
                     description: "O aplicativo será reiniciado para aplicar as atualizações.",
                   })
 
-                  setTimeout(async () => {
-                    await relaunch()
-                  }, 2000)
+                  // Aguarda 2 segundos antes de reiniciar
+                  await new Promise(resolve => setTimeout(resolve, 2000))
+                  await relaunch()
                 } catch (error) {
                   console.error('Erro ao instalar atualização:', error)
                   toast({
                     variant: "destructive",
                     title: "Erro na atualização",
-                    description: "Não foi possível instalar a atualização. Tente novamente mais tarde.",
+                    description: String(error),
                   })
                 }
               }}
@@ -100,21 +109,37 @@ export default function HomePage() {
           ),
           duration: 0, // Toast permanece até o usuário interagir
         })
+      } else {
+        console.log('Sistema já está na versão mais recente')
       }
     } catch (error) {
       console.error("Erro ao verificar atualização:", error)
+    } finally {
+      setIsCheckingUpdate(false)
     }
   }
 
+  // Verifica atualizações após o componente montar e periodicamente
   useEffect(() => {
-    verificarAtualizacao() // Verifica ao iniciar
-    
+    // Verificação inicial após 1 segundo
+    const initialCheck = setTimeout(() => {
+      console.log('Realizando verificação inicial de atualizações')
+      verificarAtualizacao()
+    }, 1000)
+
     // Verifica a cada 1 hora
-    const interval = setInterval(verificarAtualizacao, 60 * 60 * 1000)
-    
-    return () => clearInterval(interval)
+    const interval = setInterval(() => {
+      console.log('Realizando verificação periódica de atualizações')
+      verificarAtualizacao()
+    }, 60 * 60 * 1000)
+
+    // Limpa os timers quando o componente é desmontado
+    return () => {
+      clearTimeout(initialCheck)
+      clearInterval(interval)
+    }
   }, [])
-  
+
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
