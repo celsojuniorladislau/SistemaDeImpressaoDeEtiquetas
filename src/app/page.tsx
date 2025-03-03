@@ -110,9 +110,7 @@ export default function HomePage() {
               <Button 
                 variant="outline" 
                 size="sm"
-                onClick={() => {
-                  dismiss()
-                }}
+                onClick={() => dismiss()}
               >
                 Mais tarde
               </Button>
@@ -122,27 +120,38 @@ export default function HomePage() {
                 onClick={async () => {
                   try {
                     dismiss() // Fecha o toast anterior
+                    
+                    // Mostra o toast de download
                     toast({
                       title: "Baixando atualização...",
                       description: "Por favor, aguarde.",
+                      duration: 0, // Mantém o toast até ser explicitamente removido
                     })
 
+                    // Instala a atualização
+                    console.log('Iniciando instalação...')
                     await installUpdate()
-                    
+                    console.log('Instalação concluída')
+
+                    // Mostra o toast de conclusão
                     toast({
                       title: "Atualização concluída!",
-                      description: "O sistema será reiniciado para aplicar as atualizações.",
+                      description: "O sistema será reiniciado em 3 segundos...",
+                      duration: 3000, // 3 segundos
                     })
 
-                    // Aguarda 3 segundos antes de reiniciar
+                    // Aguarda 3 segundos e reinicia
+                    console.log('Aguardando para reiniciar...')
                     await new Promise(resolve => setTimeout(resolve, 3000))
+                    console.log('Reiniciando aplicação...')
                     await relaunch()
                   } catch (error) {
                     console.error('Erro ao instalar atualização:', error)
                     toast({
                       variant: "destructive",
                       title: "Erro na atualização",
-                      description: "Não foi possível instalar a atualização. Tente novamente mais tarde.",
+                      description: String(error),
+                      duration: 5000,
                     })
                   }
                 }}
@@ -158,6 +167,12 @@ export default function HomePage() {
       }
     } catch (error) {
       console.error("Erro ao verificar atualização:", error)
+      toast({
+        variant: "destructive",
+        title: "Erro ao verificar atualização",
+        description: String(error),
+        duration: 5000,
+      })
     } finally {
       setIsCheckingUpdate(false)
     }
