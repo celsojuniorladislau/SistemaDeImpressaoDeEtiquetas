@@ -1,11 +1,11 @@
 {
-  "version": "1.0.21",
-  "body": "Correção do DevTool em produção",
-  "pub_date": "2024-03-03T19:14:35.781Z",
+  "version": "1.0.22",
+  "body": "Tirando o devtools de produção",
+  "pub_date": "2024-03-03T22:50:40.781Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ0U2S0dDaU52TEphKzV4enNQNmJkMkl4ZzAyOFBXTUFHeEZBY0U1QUpGM3lpNzQzTnA5YVYxZ0Vocnh6WjlUSHJJMG1tZkErMVdsU01iSkc5R2RNSkZwNUI0TXZ0OFE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQxMDQxNjk2CWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjIxX3g2NC1zZXR1cC5uc2lzLnppcAoyYXlReEpNSEcxOWkzcTJ2QkMyY0VDOEE5Tk1WSWUwYXBoZm5lSGZQOC9OSXpuSWFiNDRnZTF6K2E4T21STXpPY3h6UlFKUUlETGlxdVFNK1lpbm1BZz09Cg==",
-      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.21/Sistema.de.Etiquetas_1.0.21_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTQ0U2S0dDaU52TEM0cGltNmI2b0c2ZjlNU1NuUE42WkpMVzhQM0xOcGxiZXk2WXh6aXBiK1UvWmZwcTBaaXJXMDZFTnJHYVJXOStQOERobCtqeXVjVUJydVFXMEgvK2c4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQxMDU0MDQ5CWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjIyX3g2NC1zZXR1cC5uc2lzLnppcAp3T1pzRHpTRkc5NmRGcWFlRVBPVHY4Rng1MG44Tm1OQ3h3OVpCUXp3S2FJVVV3V0EwOHlIMHBWeDlTZWltNmlXU0IrbDdacWxSaFFkc2JFdy9GK1NBZz09Cg==",
+      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.22/Sistema.de.Etiquetas_1.0.22_x64-setup.exe"
     }
   }
 }

@@ -1,12 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use rusb::{Context, DeviceHandle, UsbContext};
+use rusqlite::OptionalExtension;
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use tauri::State;
 use once_cell::sync::Lazy;
-use tauri::{CustomMenuItem, Menu, Submenu};
 
 // Constantes da Argox OS-2140
 const ARGOX_VID: u16 = 0x1664;  // ID do fabricante Argox
@@ -256,59 +257,278 @@ fn setup_database() -> DbConnection {
     DbConnection(Arc::new(Mutex::new(conn)))
 }
 
-#[tauri::command]
-async fn create_product(product: Product, db: tauri::State<'_, DbConnection>) -> Result<Product, String> {
-    let conn = db.0.lock().unwrap();
+fn calculate_ean13_check_digit(code: &str) -> Result<char, String> {
+    if code.len() != 12 {
+        return Err("Código deve ter 12 dígitos para cálculo do EAN-13".to_string());
+    }
+
+    let mut sum = 0;
+    for (i, c) in code.chars().enumerate() {
+        let digit = c.to_digit(10).ok_or("Código inválido")?;
+        sum += digit * if i % 2 == 0 { 1 } else { 3 };
+    }
+
+    let check_digit = (10 - (sum % 10)) % 10;
+    Ok(char::from_digit(check_digit, 10).unwrap())
+}
+
+fn get_next_sequence(conn: &Connection) -> Result<i32, String> {
+    println!("Buscando última sequência...");
+
+    let result: Result<Option<String>, rusqlite::Error> = conn.query_row(
+        "SELECT barcode FROM products ORDER BY id DESC LIMIT 1",
+        [],
+        |row| row.get(0),
+    );
+
+    let next_seq = match result {
+        Ok(Some(last_barcode)) => {
+            println!("Último código de barras encontrado: {}", last_barcode);
+            if last_barcode.len() >= 12 {
+                let sequence = &last_barcode[9..12];
+                println!("Sequência extraída: {}", sequence);
+                let current_seq = sequence.parse::<i32>().unwrap_or(0);
+                let next = current_seq + 1;
+                if next > 999 {
+                    return Err("Limite de sequência atingido".to_string());
+                }
+                next
+            } else {
+                println!("Código de barras inválido, iniciando do 1");
+                1
+            }
+        }
+        _ => {
+            println!("Nenhum código anterior, iniciando do 1");
+            1
+        }
+    };
+
+    println!("Próxima sequência: {}", next_seq);
+    Ok(next_seq)
+}
+
+fn generate_barcode(conn: &Connection) -> Result<String, String> {
+    let sequence = get_next_sequence(conn)?;
+    let prefix = "789846581";
     
-    conn.execute(
-        "INSERT INTO products (product_code, name, name_short, barcode, description) VALUES (?1, ?2, ?3, ?4, ?5)",
+    let sequence_str = format!("{:03}", sequence);
+    println!("Gerando código de barras - Prefixo: {}, Sequência: {}", prefix, sequence_str);
+    
+    let code_without_check = format!("{}{}", prefix, sequence_str);
+    let check_digit = calculate_ean13_check_digit(&code_without_check)?;
+    
+    let final_code = format!("{}{}", code_without_check, check_digit);
+    println!("Código de barras gerado: {}", final_code);
+    
+    Ok(final_code)
+}
+
+fn is_barcode_unique(conn: &Connection, barcode: &str) -> Result<bool, String> {
+    let count: i32 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM products WHERE barcode = ?",
+            params![barcode],
+            |row| row.get(0),
+        )
+        .map_err(|e| e.to_string())?;
+
+    Ok(count == 0)
+}
+
+fn validate_product_code(product_code: &str) -> Result<(), String> {
+    if product_code.trim().is_empty() {
+        return Err("Código do produto não pode estar vazio".to_string());
+    }
+    if product_code.len() > 4 {
+        return Err("Código do produto não pode ter mais de 4 digitos".to_string());
+    }
+    Ok(())
+}
+
+fn is_product_code_unique(conn: &Connection, product_code: &str, exclude_id: Option<i64>) -> Result<bool, String> {
+    let count: i32 = match exclude_id {
+        Some(id) => conn
+            .query_row(
+                "SELECT COUNT(*) FROM products WHERE product_code = ? AND id != ?",
+                params![product_code, id],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?,
+        None => conn
+            .query_row(
+                "SELECT COUNT(*) FROM products WHERE product_code = ?",
+                params![product_code],
+                |row| row.get(0),
+            )
+            .map_err(|e| e.to_string())?,
+    };
+
+    Ok(count == 0)
+}
+
+#[tauri::command]
+fn create_product(mut product: Product, db: State<DbConnection>) -> Result<Product, String> {
+    // Validar código do produto
+    validate_product_code(&product.product_code)?;
+
+    let mut conn = db.0.lock().unwrap();
+
+    // Verificar se o código do produto já existe
+    if !is_product_code_unique(&conn, &product.product_code, None)? {
+        return Err("Código do produto já existe".to_string());
+    }
+    
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+    
+    // Gera o código de barras
+    let barcode = generate_barcode(&tx)?;
+    product.barcode = barcode;
+
+    // Insere o produto dentro da mesma transação
+    tx.execute(
+        "INSERT INTO products (product_code, name, name_short, barcode, description) VALUES (?, ?, ?, ?, ?)",
         params![
-            product.product_code,
-            product.name,
-            product.name_short,
-            product.barcode,
-            product.description,
+            &product.product_code,
+            &product.name,
+            &product.name_short,
+            &product.barcode,
+            &product.description
         ],
     ).map_err(|e| e.to_string())?;
 
-    let id = conn.last_insert_rowid();
-    let mut new_product = product;
-    new_product.id = Some(id);
+    let id = tx.last_insert_rowid();
+    product.id = Some(id);
     
-    Ok(new_product)
+    let now = chrono::Local::now().to_string();
+    product.created_at = Some(now.clone());
+    product.updated_at = Some(now);
+
+    // Commit da transação
+    tx.commit().map_err(|e| e.to_string())?;
+
+    Ok(product)
 }
 
 #[tauri::command]
-async fn get_products(db: tauri::State<'_, DbConnection>) -> Result<Vec<Product>, String> {
+fn get_products(db: State<DbConnection>) -> Result<Vec<Product>, String> {
+    let conn = db.0.lock().unwrap();
+    let mut stmt = conn
+        .prepare("SELECT id, product_code, name, name_short, barcode, description, created_at, updated_at FROM products")
+        .map_err(|e| e.to_string())?;
+
+    let products = stmt
+        .query_map([], |row| {
+            Ok(Product {
+                id: Some(row.get(0)?),
+                product_code: row.get(1)?,
+                name: row.get(2)?,
+                name_short: row.get(3)?,
+                barcode: row.get(4)?,
+                description: Some(row.get::<_, String>(5)?),
+                created_at: Some(row.get::<_, String>(6)?),
+                updated_at: Some(row.get::<_, String>(7)?),
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut result = Vec::new();
+    for product in products {
+        result.push(product.map_err(|e| e.to_string())?);
+    }
+    Ok(result)
+}
+
+// Adicione esta função para verificar a sequência atual
+#[tauri::command]
+fn get_current_sequence(db: State<DbConnection>) -> Result<i32, String> {
     let conn = db.0.lock().unwrap();
     
-    let mut stmt = conn.prepare(
+    let result: Result<Option<String>, rusqlite::Error> = conn.query_row(
+        "SELECT barcode FROM products ORDER BY id DESC LIMIT 1",
+        [],
+        |row| row.get(0),
+    );
+
+    match result {
+        Ok(Some(last_barcode)) => {
+            if last_barcode.len() >= 12 {
+                let sequence = &last_barcode[9..12];
+                Ok(sequence.parse::<i32>().unwrap_or(0))
+            } else {
+                Ok(0)
+            }
+        }
+        _ => Ok(0)
+    }
+}
+
+#[tauri::command]
+fn update_product(id: i64, mut product: Product, db: State<DbConnection>) -> Result<Product, String> {
+    // Adiciona log para debug
+    println!("Tentando atualizar produto ID: {}", id);
+    println!("Dados recebidos: {:?}", product);
+
+    // Validar código do produto
+    validate_product_code(&product.product_code)?;
+    
+    let mut conn = db.0.lock().unwrap();
+    
+    // Primeiro, verifica se o produto existe
+    let existing_product: Option<Product> = conn.query_row(
         "SELECT id, product_code, name, name_short, barcode, description, created_at, updated_at 
-         FROM products"
+         FROM products WHERE id = ?",
+        params![id],
+        |row| {
+            Ok(Product {
+                id: Some(row.get(0)?),
+                product_code: row.get(1)?,
+                name: row.get(2)?,
+                name_short: row.get(3)?,
+                barcode: row.get(4)?,
+                description: Some(row.get(5)?),
+                created_at: Some(row.get(6)?),
+                updated_at: Some(row.get(7)?),
+            })
+        },
+    ).optional().map_err(|e| e.to_string())?;
+
+    let existing_product = existing_product.ok_or("Produto não encontrado")?;
+    
+    // Verificar se o código do produto já existe (excluindo o próprio produto)
+    if !is_product_code_unique(&conn, &product.product_code, Some(id))? {
+        return Err("Já existe outro produto cadastrado com este código".to_string());
+    }
+
+    // Iniciar transação
+    let tx = conn.transaction().map_err(|e| e.to_string())?;
+
+    // Manter o código de barras original
+    product.barcode = existing_product.barcode;
+    
+    // Atualizar o produto
+    tx.execute(
+        "UPDATE products SET 
+            name = ?, 
+            name_short = ?, 
+            product_code = ?, 
+            description = ?,
+            updated_at = CURRENT_TIMESTAMP
+         WHERE id = ?",
+        params![
+            &product.name,
+            &product.name_short,
+            &product.product_code,
+            &product.description,
+            id
+        ],
     ).map_err(|e| e.to_string())?;
 
-    let products = stmt.query_map([], |row| {
-        Ok(Product {
-            id: Some(row.get(0)?),
-            product_code: row.get(1)?,
-            name: row.get(2)?,
-            name_short: row.get(3)?,
-            barcode: row.get(4)?,
-            description: Some(row.get(5)?),
-            created_at: Some(row.get(6)?),
-            updated_at: Some(row.get(7)?),
-        })
-    }).map_err(|e| e.to_string())?;
+    // Commit da transação
+    tx.commit().map_err(|e| e.to_string())?;
 
-    let products: Result<Vec<_>, _> = products.collect();
-    products.map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn get_product(id: i64, db: tauri::State<'_, DbConnection>) -> Result<Product, String> {
-    let conn = db.0.lock().unwrap();
-    
-    conn.query_row(
+    // Buscar o produto atualizado
+    let updated_product: Product = conn.query_row(
         "SELECT id, product_code, name, name_short, barcode, description, created_at, updated_at 
          FROM products WHERE id = ?",
         params![id],
@@ -324,59 +544,19 @@ async fn get_product(id: i64, db: tauri::State<'_, DbConnection>) -> Result<Prod
                 updated_at: Some(row.get(7)?),
             })
         },
-    ).map_err(|e| e.to_string())
+    ).map_err(|e| e.to_string())?;
+
+    println!("Produto atualizado com sucesso: {:?}", updated_product);
+    Ok(updated_product)
 }
 
 #[tauri::command]
-async fn update_product(id: i64, product: Product, db: tauri::State<'_, DbConnection>) -> Result<Product, String> {
-    // Primeiro, fazemos todas as operações com o conn
-    {
-        let conn = db.0.lock().unwrap();
-        conn.execute(
-            "UPDATE products SET 
-                product_code = ?1, 
-                name = ?2, 
-                name_short = ?3, 
-                description = ?4,
-                updated_at = CURRENT_TIMESTAMP
-             WHERE id = ?5",
-            params![
-                product.product_code,
-                product.name,
-                product.name_short,
-                product.description,
-                id
-            ],
-        ).map_err(|e| e.to_string())?;
-    } // conn é liberado aqui
-
-    // Agora podemos buscar o produto atualizado
+fn delete_product(id: i64, db: State<DbConnection>) -> Result<(), String> {
     let conn = db.0.lock().unwrap();
-    conn.query_row(
-        "SELECT id, product_code, name, name_short, barcode, description, created_at, updated_at 
-         FROM products WHERE id = ?",
-        params![id],
-        |row| {
-            Ok(Product {
-                id: Some(row.get(0)?),
-                product_code: row.get(1)?,
-                name: row.get(2)?,
-                name_short: row.get(3)?,
-                barcode: row.get(4)?,
-                description: Some(row.get(5)?),
-                created_at: Some(row.get(6)?),
-                updated_at: Some(row.get(7)?),
-            })
-        },
-    ).map_err(|e| e.to_string())
-}
-
-#[tauri::command]
-async fn delete_product(id: i64, db: tauri::State<'_, DbConnection>) -> Result<(), String> {
-    let conn = db.0.lock().unwrap();
-    conn.execute("DELETE FROM products WHERE id = ?", params![id])
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    match conn.execute("DELETE FROM products WHERE id = ?", params![id]) {
+        Ok(_) => Ok(()),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 #[tauri::command]
@@ -384,16 +564,19 @@ async fn print_label_batch(products: Vec<Option<Product>>, _config: PrinterConfi
     let printer_guard = PRINTER.lock().unwrap();
     
     if let Some(printer) = &*printer_guard {
+        // Configurações para 3 etiquetas lado a lado
         let mut commands = vec![
             "ZT\r\n".to_string(),                      // Limpa buffer
-            format!("Q{},24\r\n", printer.config.height), // Altura
-            format!("q{}\r\n", printer.config.width),   // Largura
+            format!("Q{},24\r\n", printer.config.height), // Altura (22mm = 176 dots)
+            format!("q{}\r\n", printer.config.width),   // Largura total (105mm = 840 dots)
             format!("S{}\r\n", printer.config.speed),   // Velocidade
             format!("D{}\r\n", printer.config.darkness), // Densidade
         ];
 
+        // Posições X para cada etiqueta
         let x_positions = [50, 314, 578];
 
+        // Adiciona comandos para cada etiqueta
         for (index, product) in products.iter().enumerate() {
             if let Some(product) = product {
                 let x = x_positions[index];
@@ -406,7 +589,7 @@ async fn print_label_batch(products: Vec<Option<Product>>, _config: PrinterConfi
             }
         }
 
-        commands.push("P1\r\n".to_string());
+        commands.push("P1\r\n".to_string());  // Imprime
 
         for cmd in commands {
             printer.write(cmd.as_bytes())?;
@@ -419,47 +602,72 @@ async fn print_label_batch(products: Vec<Option<Product>>, _config: PrinterConfi
 }
 
 #[tauri::command]
-async fn get_print_history(db: tauri::State<'_, DbConnection>) -> Result<Vec<PrintJob>, String> {
+fn get_print_history(db: State<DbConnection>) -> Result<Vec<PrintJob>, String> {
     let conn = db.0.lock().unwrap();
-    
-    let mut stmt = conn.prepare(
-        "SELECT id, product_id, product_name, product_code, created_at, status 
-         FROM print_jobs ORDER BY created_at DESC"
-    ).map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT id, product_id, product_name, product_code, created_at, status FROM print_jobs ORDER BY created_at DESC")
+        .map_err(|e| e.to_string())?;
 
-    let jobs = stmt.query_map([], |row| {
-        Ok(PrintJob {
-            id: row.get(0)?,
-            product_id: row.get(1)?,
-            product_name: row.get(2)?,
-            product_code: row.get(3)?,
-            created_at: row.get(4)?,
-            status: row.get(5)?,
+    let jobs = stmt
+        .query_map([], |row| {
+            Ok(PrintJob {
+                id: row.get(0)?,
+                product_id: row.get(1)?,
+                product_name: row.get(2)?,
+                product_code: row.get(3)?,
+                created_at: row.get(4)?,
+                status: row.get(5)?,
+            })
         })
-    }).map_err(|e| e.to_string())?;
+        .map_err(|e| e.to_string())?;
 
-    let jobs: Result<Vec<_>, _> = jobs.collect();
-    jobs.map_err(|e| e.to_string())
+    let mut result = Vec::new();
+    for job in jobs {
+        result.push(job.map_err(|e| e.to_string())?);
+    }
+    Ok(result)
 }
 
 #[tauri::command]
-async fn save_printer_settings(config: PrinterConfig, db: tauri::State<'_, DbConnection>) -> Result<(), String> {
+async fn print_test() -> Result<(), String> {
+    let printer_guard = PRINTER.lock().unwrap();
+    
+    if let Some(printer) = &*printer_guard {
+        printer.print_label("Teste de Impressão")?;
+        Ok(())
+    } else {
+        Err("Impressora não conectada".to_string())
+    }
+}
+
+#[tauri::command]
+async fn save_printer_settings(config: PrinterConfig, db: State<'_, DbConnection>) -> Result<(), String> {
     let conn = db.0.lock().unwrap();
     
+    conn.execute("DELETE FROM printer_settings", [])
+        .map_err(|e| e.to_string())?;
+    
     conn.execute(
-        "INSERT INTO printer_settings (darkness, width, height, speed) VALUES (?1, ?2, ?3, ?4)",
-        params![config.darkness, config.width, config.height, config.speed],
+        "INSERT INTO printer_settings (
+            darkness, width, height, speed
+        ) VALUES (?, ?, ?, ?)",
+        params![
+            config.darkness,
+            config.width,
+            config.height,
+            config.speed,
+        ],
     ).map_err(|e| e.to_string())?;
     
     Ok(())
 }
 
 #[tauri::command]
-async fn get_printer_settings(db: tauri::State<'_, DbConnection>) -> Result<Option<PrinterConfig>, String> {
+async fn get_printer_settings(db: State<'_, DbConnection>) -> Result<Option<PrinterConfig>, String> {
     let conn = db.0.lock().unwrap();
     
     let result = conn.query_row(
-        "SELECT darkness, width, height, speed FROM printer_settings ORDER BY created_at DESC LIMIT 1",
+        "SELECT darkness, width, height, speed FROM printer_settings LIMIT 1",
         [],
         |row| {
             Ok(PrinterConfig {
@@ -472,7 +680,7 @@ async fn get_printer_settings(db: tauri::State<'_, DbConnection>) -> Result<Opti
     );
     
     match result {
-        Ok(config) => Ok(Some(config)),
+        Ok(settings) => Ok(Some(settings)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
         Err(e) => Err(e.to_string()),
     }
@@ -487,18 +695,6 @@ async fn connect_printer(config: PrinterConfig) -> Result<(), String> {
     *printer_guard = Some(printer);
     
     Ok(())
-}
-
-#[tauri::command]
-async fn print_test() -> Result<(), String> {
-    let printer_guard = PRINTER.lock().unwrap();
-    
-    if let Some(printer) = &*printer_guard {
-        printer.print_label("Teste de Impressão")?;
-        Ok(())
-    } else {
-        Err("Impressora não conectada".to_string())
-    }
 }
 
 #[tauri::command]
@@ -529,54 +725,30 @@ async fn list_printers() -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-async fn get_current_sequence(db: tauri::State<'_, DbConnection>) -> Result<i32, String> {
+fn get_product(id: i64, db: State<DbConnection>) -> Result<Product, String> {
     let conn = db.0.lock().unwrap();
     
-    let result: Result<Option<String>, rusqlite::Error> = conn.query_row(
-        "SELECT barcode FROM products ORDER BY id DESC LIMIT 1",
-        [],
-        |row| row.get(0),
-    );
-
-    match result {
-        Ok(Some(last_barcode)) => {
-            if last_barcode.len() >= 12 {
-                let sequence = &last_barcode[9..12];
-                Ok(sequence.parse::<i32>().unwrap_or(0))
-            } else {
-                Ok(0)
-            }
-        }
-        _ => Ok(0)
-    }
+    conn.query_row(
+        "SELECT id, product_code, name, name_short, barcode, description, created_at, updated_at 
+         FROM products WHERE id = ?",
+        params![id],
+        |row| {
+            Ok(Product {
+                id: Some(row.get(0)?),
+                product_code: row.get(1)?,
+                name: row.get(2)?,
+                name_short: row.get(3)?,
+                barcode: row.get(4)?,
+                description: Some(row.get(5)?),
+                created_at: Some(row.get(6)?),
+                updated_at: Some(row.get(7)?),
+            })
+        },
+    ).map_err(|e| e.to_string())
 }
 
 fn main() {
-    let devtools = CustomMenuItem::new("devtools".to_string(), "Abrir DevTools");
-    let debug_menu = Submenu::new("Debug", Menu::new().add_item(devtools));
-    let menu = Menu::new().add_submenu(debug_menu);
-
     tauri::Builder::default()
-        .menu(menu)
-        .on_menu_event(|event| {
-            match event.menu_item_id() {
-                "devtools" => {
-                    #[cfg(debug_assertions)]
-                    {
-                        let window = event.window();
-                        window.open_devtools();
-                        println!("DevTools aberto via menu");
-                    }
-                }
-                _ => {}
-            }
-        })
-        .setup(|app| {
-            println!("Aplicativo iniciado");
-            println!("Versão: {}", app.package_info().version);
-            
-            Ok(())
-        })
         .manage(setup_database())
         .invoke_handler(tauri::generate_handler![
             create_product,
