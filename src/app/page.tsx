@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Package2, Printer, History } from 'lucide-react'
 import { invoke } from "@tauri-apps/api/tauri"
+import { listen } from "@tauri-apps/api/event"
 import Link from "next/link"
 import { Skeleton } from "@/components/ui/skeleton"
-import { checkUpdate, installUpdate } from "@tauri-apps/api/updater"
 import { relaunch } from "@tauri-apps/api/process"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -88,20 +88,43 @@ export default function HomePage() {
     setIsCheckingUpdate(true)
     try {
       console.log('Iniciando verificação de atualização...')
-      const update = await checkUpdate()
-      console.log('Resultado da verificação:', update)
+      // Usar o comando do backend para verificar atualizações
+      const updateAvailable = await invoke<boolean>('check_update_from_backend')
+      console.log('Resultado da verificação:', updateAvailable)
+      
+      if (!updateAvailable) {
+        console.log('Sistema já está na versão mais recente')
+        toast({
+          title: "Sistema atualizado",
+          description: "Você já está usando a versão mais recente do sistema.",
+          duration: 3000,
+        })
+      }
+      // O resto será tratado pelos listeners de eventos
+    } catch (error) {
+      console.error("Erro ao verificar atualização:", error)
+      toast({
+        variant: "destructive",
+        title: "Erro ao verificar atualização",
+        description: String(error),
+        duration: 5000,
+      })
+    } finally {
+      setIsCheckingUpdate(false)
+    }
+  }
 
-      if (update.shouldUpdate) {
-        console.log('Nova versão disponível:', update.manifest?.version)
-        
-        const descricao = formatarDescricaoAtualizacao(update.manifest?.body)
-        
+  // Configurar listeners de eventos de atualização
+  useEffect(() => {
+    const unlisten = Promise.all([
+      listen('update-available', (event) => {
+        const { version, body } = event.payload as any
         toast({
           title: "Nova versão disponível!",
           description: (
             <div className="mt-2 space-y-2">
-              <p>Versão {update.manifest?.version}</p>
-              <p className="text-sm text-muted-foreground">{descricao}</p>
+              <p>Versão {version}</p>
+              <p className="text-sm text-muted-foreground">{formatarDescricaoAtualizacao(body)}</p>
               <p className="text-sm">Deseja atualizar agora?</p>
             </div>
           ),
@@ -119,7 +142,7 @@ export default function HomePage() {
                 size="sm"
                 onClick={async () => {
                   try {
-                    dismiss() // Fecha o toast anterior
+                    dismiss()
                     
                     // Mostra o toast de download
                     toast({
@@ -127,24 +150,9 @@ export default function HomePage() {
                       description: "Por favor, aguarde.",
                       duration: 0, // Mantém o toast até ser explicitamente removido
                     })
-
-                    // Instala a atualização
-                    console.log('Iniciando instalação...')
-                    await installUpdate()
-                    console.log('Instalação concluída')
-
-                    // Mostra o toast de conclusão
-                    toast({
-                      title: "Atualização concluída!",
-                      description: "O sistema será reiniciado em 3 segundos...",
-                      duration: 3000, // 3 segundos
-                    })
-
-                    // Aguarda 3 segundos e reinicia
-                    console.log('Aguardando para reiniciar...')
-                    await new Promise(resolve => setTimeout(resolve, 3000))
-                    console.log('Reiniciando aplicação...')
-                    await relaunch()
+                    
+                    // Usar o comando do backend para instalar
+                    await invoke('install_update_from_backend')
                   } catch (error) {
                     console.error('Erro ao instalar atualização:', error)
                     toast({
@@ -162,21 +170,58 @@ export default function HomePage() {
           ),
           duration: 0, // Toast permanece até o usuário interagir
         })
-      } else {
-        console.log('Sistema já está na versão mais recente')
-      }
-    } catch (error) {
-      console.error("Erro ao verificar atualização:", error)
-      toast({
-        variant: "destructive",
-        title: "Erro ao verificar atualização",
-        description: String(error),
-        duration: 5000,
+      }),
+      
+      listen('update-download-progress', (event) => {
+        const { progress } = event.payload as any
+        console.log(`Progresso do download: ${progress.toFixed(1)}%`)
+        // Você pode atualizar um componente de progresso aqui se desejar
+      }),
+      
+      listen('update-downloaded', () => {
+        dismiss() // Fecha qualquer toast anterior
+        toast({
+          title: "Atualização baixada!",
+          description: "A atualização será instalada na próxima reinicialização.",
+          duration: 3000,
+        })
+      }),
+      
+      listen('update-installed', () => {
+        toast({
+          title: "Atualização instalada!",
+          description: "O sistema será reiniciado em 3 segundos...",
+          duration: 3000,
+        })
+        
+        // Aguarda 3 segundos e reinicia
+        setTimeout(async () => {
+          try {
+            await relaunch()
+          } catch (error) {
+            console.error('Erro ao reiniciar aplicação:', error)
+          }
+        }, 3000)
+      }),
+      
+      listen('update-error', (event) => {
+        const { error } = event.payload as any
+        toast({
+          variant: "destructive",
+          title: "Erro na atualização",
+          description: error,
+          duration: 5000,
+        })
+      }),
+    ])
+
+    // Limpar listeners quando o componente for desmontado
+    return () => {
+      unlisten.then(listeners => {
+        listeners.forEach(unlistenFn => unlistenFn())
       })
-    } finally {
-      setIsCheckingUpdate(false)
     }
-  }
+  }, [])
 
   // Verifica atualizações após o componente montar e periodicamente
   useEffect(() => {
@@ -203,6 +248,13 @@ export default function HomePage() {
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard</h1>
+        <Button 
+          variant="outline" 
+          onClick={verificarAtualizacao}
+          disabled={isCheckingUpdate}
+        >
+          {isCheckingUpdate ? "Verificando..." : "Verificar Atualizações"}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

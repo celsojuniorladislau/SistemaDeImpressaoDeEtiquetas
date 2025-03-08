@@ -5,8 +5,9 @@ use rusqlite::OptionalExtension;
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-use tauri::State;
+use tauri::{Manager, AppHandle, State};
 use once_cell::sync::Lazy;
 
 // Constantes da Argox OS-2140
@@ -70,6 +71,19 @@ pub struct UsbPrinter {
     endpoint_out: u8,
     endpoint_in: u8,
     config: PrinterConfig,
+}
+
+// Estrutura para controlar o estado da atualização
+struct UpdaterState {
+    checking: AtomicBool,
+}
+
+// Estrutura para informações de atualização
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct UpdateInfo {
+    version: String,
+    body: Option<String>,
+    date: String,
 }
 
 impl UsbPrinter {
@@ -747,10 +761,142 @@ fn get_product(id: i64, db: State<DbConnection>) -> Result<Product, String> {
     ).map_err(|e| e.to_string())
 }
 
+// Funções de atualização automática
+#[tauri::command]
+async fn check_update_from_backend(app_handle: AppHandle) -> Result<bool, String> {
+    println!("Verificando atualizações a partir do backend...");
+    
+    match app_handle.updater().check().await {
+        Ok(update) => {
+            let update_available = update.is_update_available();
+            println!("Verificação concluída. Atualização disponível: {}", update_available);
+            
+            if update_available {
+                // Extrair informações da atualização
+                let version = update.latest_version().to_string();
+                let body = update.body().map(|s| s.to_string());
+                
+                // Formatar a data para exibição
+                let date_str = update.date()
+                    .map(|d| format!("{}-{:02}-{:02}", d.year(), d.month() as u8, d.day()))
+                    .unwrap_or_else(|| "Data desconhecida".to_string());
+                
+                // Emitir evento para o frontend
+                let _ = app_handle.emit_all("update-available", UpdateInfo {
+                    version,
+                    body,
+                    date: date_str,
+                });
+            }
+            
+            Ok(update_available)
+        },
+        Err(e) => {
+            println!("Erro ao verificar atualizações: {}", e);
+            Err(format!("Erro ao verificar atualizações: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
+async fn install_update_from_backend(app_handle: AppHandle) -> Result<(), String> {
+    println!("Instalando atualização a partir do backend...");
+    
+    // Verificar se há atualizações disponíveis
+    let update = match app_handle.updater().check().await {
+        Ok(update) => {
+            if !update.is_update_available() {
+                return Err("Não há atualizações disponíveis".to_string());
+            }
+            update
+        },
+        Err(e) => {
+            return Err(format!("Erro ao verificar atualizações: {}", e));
+        }
+    };
+    
+    // Emitir evento de início do download
+    let _ = app_handle.emit_all("update-pending", ());
+    
+    // Iniciar o processo de atualização
+    match update.download_and_install().await {
+        Ok(_) => {
+            println!("Atualização instalada com sucesso");
+            let _ = app_handle.emit_all("update-installed", ());
+            Ok(())
+        },
+        Err(e) => {
+            println!("Erro ao instalar atualização: {}", e);
+            let _ = app_handle.emit_all("update-error", serde_json::json!({
+                "error": e.to_string()
+            }));
+            Err(format!("Erro ao instalar atualização: {}", e))
+        }
+    }
+}
+
+// Função para verificar atualizações automaticamente na inicialização
+async fn check_update_on_startup(app_handle: AppHandle, updater_state: Arc<UpdaterState>) {
+    // Aguarda 2 segundos antes de verificar atualizações para não atrasar a inicialização
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    
+    // Evita verificações simultâneas
+    if updater_state.checking.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+        println!("Verificando atualizações na inicialização...");
+        
+        match app_handle.updater().check().await {
+            Ok(update) => {
+                if update.is_update_available() {
+                    println!("Nova versão disponível na inicialização");
+                    
+                    // Extrair informações da atualização
+                    let version = update.latest_version().to_string();
+                    let body = update.body().map(|s| s.to_string());
+                    
+                    // Formatar a data para exibição
+                    let date_str = update.date()
+                        .map(|d| format!("{}-{:02}-{:02}", d.year(), d.month() as u8, d.day()))
+                        .unwrap_or_else(|| "Data desconhecida".to_string());
+                    
+                    // Emitir evento para o frontend
+                    let _ = app_handle.emit_all("update-available", UpdateInfo {
+                        version,
+                        body,
+                        date: date_str,
+                    });
+                } else {
+                    println!("Sistema já está na versão mais recente");
+                }
+            },
+            Err(e) => {
+                println!("Erro ao verificar atualizações na inicialização: {}", e);
+            }
+        }
+        
+        updater_state.checking.store(false, Ordering::SeqCst);
+    }
+}
+
 fn main() {
+    let updater_state = Arc::new(UpdaterState {
+        checking: AtomicBool::new(false),
+    });
+    
     tauri::Builder::default()
         .manage(setup_database())
+        .manage(updater_state.clone())
+        .setup(move |app| {
+            // Verificar atualizações na inicialização
+            let app_handle = app.handle().clone();
+            let state = updater_state.clone();
+            tauri::async_runtime::spawn(async move {
+                check_update_on_startup(app_handle, state).await;
+            });
+            
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
+            // Comandos existentes...
             create_product,
             get_products,
             get_product,
@@ -764,6 +910,9 @@ fn main() {
             print_test,
             list_printers,
             get_current_sequence,
+            // Novos comandos de atualização
+            check_update_from_backend,
+            install_update_from_backend,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
