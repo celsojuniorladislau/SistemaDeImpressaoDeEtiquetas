@@ -1,11 +1,11 @@
 {
-  "version": "1.0.26",
-  "body": "Correção no sidebar - ajutes de alguns icones",
+  "version": "1.0.27",
+  "body": "Mudança do mome do produto para Sistema.de.Etiquetas no nome do executavel",
   "pub_date": "2024-03-04T08:25:40.781Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dXIrZnpCYkRudW1jUDE5Qjh3T1NxK1NOaFptT1NXVUZ2M3lkYUhwTXdKSG05dy9tOWFTamZUMnlqQThSdThlaUdxaUZ6RjlLRzNRUHdIa01POU8xK1FvPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQxNDY3MTgyCWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjI2X3g2NC1zZXR1cC5uc2lzLnppcApnU2lNazAzLyszVUxvSWVkdmNYOExxK09od2NUK29zREZHOUZqVlR0VmxNbFJmS0hqQmhzMEdHNU11T05KVDh1dUlxeXFWM05YMFNlTm9aT2RzQUtEZz09Cg==",
-      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.26/Sistema.de.Etiquetas_1.0.26_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dWdKdVdhWXJ6dmQ2YzdWUGIrNGZWVlRiRFQ2VWhzTmFsZ2ZKblhLUms3MXhhOXVRRlFPNERkd05aWFVWRjhoYzJtWmh5T0hacVNvN0N6YTFYeTcvTWdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQxNDcwMDIyCWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4wLjI3X3g2NC1zZXR1cC5uc2lzLnppcAo5WC9VTlgyQjA3YVVOekVsZzViNkVmUm5IUFlTRk5Md0ZlOC9SYnVUQnZJMlB1MFcvbHIwUi9aQzVWZFdIbmxLeEtsSmhydU5NVXJ3WlpJRVBrdXREUT09Cg==",
+      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.27/Sistema.de.Etiquetas_1.0.2_x64-setup.exe"
     }
   }
 }
