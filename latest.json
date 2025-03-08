@@ -1,10 +1,10 @@
 {
   "version": "1.0.25",
-  "body": "Correção no sistema de atulizações automaticas",
+  "body": "Correção no sistema de atualizações automáticas - ajustes no backend",
   "pub_date": "2024-03-04T08:25:40.781Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dXZyOWJSaHBPWEtteXJpV1lyMUxwMHhoaHBzb1ZVWG0wcnlaWFJseGVUVVBPOW90TGZmUEUyYm1hYTc2a0F6aWZFU1BVNE5OUkJUM0EwRWFZMkJMK1FRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQxMzA4MDU4CWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjI0X3g2NC1zZXR1cC5uc2lzLnppcApVVzVkVThsc2dDZU5QalN6d1pyMUpaMjg5VW9pTExwdVU5WWJCUGdMZ0Q0YkZKU0oxdnJJNUxFRHpmTnorcG5oWXl4OGUwR2VVeXZPZGlHMXJjVnNBZz09Cg==",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dXRoYTBDSmVHK3E0Zm1vWm1mSkdNTVlBSHpUdzM1OXJ0MGd6ZURlb0xnNzkrcTRnc3o4V3FPQlJXTTJDTkFtZk1zS2ZMZXg0OWZCaEVMcmJuTUxNcVEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQxNDY2MDQ0CWZpbGU6U2lzdGVtYSBkZSBFdGlxdWV0YXNfMS4wLjI1X3g2NC1zZXR1cC5uc2lzLnppcApJY1M0cDR0dTJqSXFVeXhqUkhBdVcxNHFtZWU3NndneG12Uk43bVNTdzBLSE9ZTlI1QWxCM1ppbWZ3Vm03L3BzMFRvWTl2QitybGwzdWYvT3FZZFBEdz09Cg==",
       "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.25/Sistema.de.Etiquetas_1.0.25_x64-setup.exe"
     }
   }
