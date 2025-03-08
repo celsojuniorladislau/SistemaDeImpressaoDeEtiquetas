@@ -1,6 +1,6 @@
 {
-  "version": "1.0.25",
-  "body": "Correção no sistema de atualizações automáticas - ajustes no backend",
+  "version": "1.0.26",
+  "body": "Correção no sidebar - ajutes de alguns icones",
   "pub_date": "2024-03-04T08:25:40.781Z",
   "platforms": {
     "windows-x86_64": {

@@ -1,7 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Package, Tags, Settings, Home, Printer } from 'lucide-react'
+import { Package, Settings, Home, Printer } from 'lucide-react'
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
@@ -14,12 +14,12 @@ const menuItems = [
   {
     title: "Impressão",
     href: "/impressao",
-    icon: Package
+    icon: Printer
   },
   {
     title: "Produtos",
     href: "/produtos",
-    icon: Printer
+    icon: Package
   },
   {
     title: "Configurações",
