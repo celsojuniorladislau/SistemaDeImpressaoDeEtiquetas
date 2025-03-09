@@ -1,11 +1,11 @@
 {
-  "version": "1.0.28",
-  "body": "Ajuste de layout na página de impresão",
+  "version": "1.0.29",
+  "body": "Melhorias na notificação (toast) de sobre nova atualização dispoviível do sistema.",
   "pub_date": "2024-03-04T08:25:40.781Z",
   "platforms": {
     "windows-x86_64": {
       "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dW1iRzdWQ2F3emdXRlRRR0NkQTQrUC9WV3F5SkNaM3gveXBmcHVaUy8zR0hpUUZVZzRhZERxR3dRM1FGVU5vNXJCL283VmJnUm0zeDFPNmpIbnMrM3dFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQxNDgyNjU2CWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4wLjI4X3g2NC1zZXR1cC5uc2lzLnppcAprOGFmMytvSzVMZGNKSUdHcjROOFNzQkRrRm5HWVdhK1hEemVwalBrMW0ySXR5TmI4eDRKUitmYmFSVnVvN3EyRm9EbGo0TzBzMGxWMlNXWlR5TFREQT09Cg==",
-      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.28/Sistema.de.Etiquetas_1.0.28_x64-setup.nsis.zip"
+      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.29/Sistema.de.Etiquetas_1.0.29_x64-setup.nsis.zip"
     }
   }
 }
