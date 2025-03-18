@@ -38,6 +38,7 @@ function formatarData(data: string): string {
   })
 }
 
+// Adicione o componente no início do conteúdo da página
 export default function HomePage() {
   const [stats, setStats] = useState<Stats>({
     totalProducts: 0,
@@ -83,9 +84,8 @@ export default function HomePage() {
     <div className="container mx-auto p-4 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        {/* Botão de verificação de atualizações removido daqui */}
       </div>
-
+      
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="dashboard-card">
           <CardHeader className="flex flex-row items-center justify-between pb-2">

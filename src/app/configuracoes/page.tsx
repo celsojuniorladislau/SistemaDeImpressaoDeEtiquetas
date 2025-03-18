@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
 import { Printer, RefreshCcw, Settings, AlertCircle, Info } from "lucide-react"
 import { getVersion } from "@tauri-apps/api/app"
+import { PrinterStatus } from "@/components/printer-status"
 
 interface PrinterConfig {
   darkness: number
@@ -69,9 +70,39 @@ export default function ConfiguracaoPage() {
     }
   }
 
+  const testPrint = async () => {
+    setDebugInfo("Enviando teste de impressão...")
+    try {
+      await invoke("print_test")
+      setDebugInfo("Teste de impressão enviado com sucesso")
+      toast.success("Teste enviado!", {
+        description: "Verifique a impressora",
+      })
+    } catch (error) {
+      setDebugInfo(`Erro no teste: ${error}`)
+      toast.error("Erro ao imprimir teste", {
+        description: String(error),
+      })
+    }
+  }
+
+  // Adicione uma nova função para verificar se a impressora está em modo simulado
+  const checkPrinterMode = async () => {
+    try {
+      const isMock = await invoke<boolean>("is_printer_mock")
+      if (isMock && printers.length === 0) {
+        setPrinters(["Impressora Argox OS-2140 (Simulada)"])
+        setDebugInfo("Impressora simulada detectada")
+      }
+    } catch (error) {
+      console.error("Erro ao verificar modo da impressora:", error)
+    }
+  }
+
   useEffect(() => {
     searchPrinters()
     loadSavedConfig()
+    checkPrinterMode() // Adicione esta linha
 
     // Carregar versão do sistema
     async function loadVersion() {
@@ -104,22 +135,6 @@ export default function ConfiguracaoPage() {
       })
     } finally {
       setLoading(false)
-    }
-  }
-
-  const testPrint = async () => {
-    setDebugInfo("Enviando teste de impressão...")
-    try {
-      await invoke("print_test")
-      setDebugInfo("Teste de impressão enviado com sucesso")
-      toast.success("Teste enviado!", {
-        description: "Verifique a impressora",
-      })
-    } catch (error) {
-      setDebugInfo(`Erro no teste: ${error}`)
-      toast.error("Erro ao imprimir teste", {
-        description: String(error),
-      })
     }
   }
 
@@ -299,6 +314,9 @@ export default function ConfiguracaoPage() {
               </div>
             </CardContent>
           </Card>
+          <div className="mt-4">
+          <PrinterStatus />
+          </div>
         </TabsContent>
       </Tabs>
     </div>
