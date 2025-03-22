@@ -1,11 +1,11 @@
 {
-  "version": "1.0.30",
-  "body": "Correção de conexão do sistema com a impressora - tirando a linguagem PPLA e usando a PPLB.",
-  "pub_date": "2024-03-04T08:25:40.781Z",
+  "version": "1.0.31",
+  "notes": "Versão corrigida com bug do login resolvido",
+  "pub_date": "2023-08-13T19:25:53.085Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dXBId3BPanAwdHM1d2Q3QVhjTG1pODVwNzF2dk5Venk0WkZMTUxuZVpnRWltVjI0UC9BM2NKRzB1UUtyeW9TaGpIdTdPNXZzMVVTQ25hL1dTTUFSMlFjPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQyMjY1MTk0CWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4wLjMwX3g2NC1zZXR1cC5uc2lzLnppcAozOEIzRkRCTzlWNG9pT2tNOUJaMFlGb0V4S1Y3eTEzSEVZT0dGYUtxT1lySGRwK0RJdWhnVlE4cmJia2RnSW52MVcwcDVsbEFjdXQzbUI5VHNxUTFEdz09Cg==",
-      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.30/Sistema.de.Etiquetas_1.0.30_x64-setup.nsis.zip"
+      "signature": "",
+      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.31/Sistema.de.Etiquetas_1.0.31_x64-setup.nsis.zip"
     }
   }
 }
