@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
-import { Eye, ZoomIn, ZoomOut, Sun, Moon } from "lucide-react"
+import { Eye, ZoomIn, ZoomOut } from "lucide-react"
 
 interface Product {
   id?: number
@@ -84,8 +84,7 @@ function getEAN13Encoding(code: string): string {
 
 export function LabelPreviewDialog({ products, disabled = false }: LabelPreviewDialogProps) {
   const [open, setOpen] = useState(false)
-  const [previewScale, setPreviewScale] = useState(2)
-  const [darkPreview, setDarkPreview] = useState(false)
+  const [previewScale, setPreviewScale] = useState(1)
 
   // Cálculo correto de produtos únicos e total de etiquetas
   const validProducts = products.filter((p): p is Product => p !== null)
@@ -103,7 +102,7 @@ export function LabelPreviewDialog({ products, disabled = false }: LabelPreviewD
 
   // Função para alternar o zoom
   const toggleZoom = () => {
-    setPreviewScale((prev) => (prev === 2 ? 1 : 2))
+    setPreviewScale((prev) => (prev === 1 ? 2 : 1))
   }
 
   // Função para converter mm em pixels com escala dinâmica
@@ -156,30 +155,22 @@ export function LabelPreviewDialog({ products, disabled = false }: LabelPreviewD
                 variant="ghost"
                 size="icon"
                 onClick={toggleZoom}
-                title={previewScale === 2 ? "Visualizar em tamanho real" : "Aumentar zoom"}
+                title={previewScale === 1 ? "Aumentar zoom" : "Visualizar em tamanho real"}
               >
-                {previewScale === 2 ? <ZoomOut className="h-4 w-4" /> : <ZoomIn className="h-4 w-4" />}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setDarkPreview(!darkPreview)}
-                title="Alternar Fundo Escuro"
-              >
-                {darkPreview ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                {previewScale === 1 ? <ZoomIn className="h-4 w-4" /> : <ZoomOut className="h-4 w-4" />}
               </Button>
             </div>
           </div>
           <DialogDescription className="flex items-center justify-between">
             <span>Visualização das etiquetas que serão impressas</span>
             <span className="text-sm font-normal text-muted-foreground">
-              {previewScale === 2 ? "Zoom 2x" : "Tamanho Real"}
+              {previewScale === 1 ? "Tamanho Real" : "Zoom 2x"}
             </span>
           </DialogDescription>
         </DialogHeader>
 
         <div
-          className={cn("rounded-lg transition-colors", darkPreview ? "bg-slate-800" : "bg-muted/50")}
+          className="rounded-lg transition-colors bg-slate-800"
           style={{
             maxHeight: "calc(90vh - 200px)",
             overflowY: "auto",
@@ -205,8 +196,9 @@ export function LabelPreviewDialog({ products, disabled = false }: LabelPreviewD
                     <div
                       key={`${rowIndex}-${index}`}
                       className={cn(
-                        "bg-white shadow-lg rounded-lg flex flex-col items-center justify-between transition-all duration-200",
+                        "shadow-lg rounded-lg flex flex-col items-center justify-between transition-all duration-200",
                         "relative overflow-hidden",
+                        "bg-white text-black"
                       )}
                       style={{
                         width: mmToPx(33),
@@ -216,19 +208,19 @@ export function LabelPreviewDialog({ products, disabled = false }: LabelPreviewD
                     >
                       <div className="flex-1 flex flex-col justify-start items-center gap-[0.15rem] w-full">
                         <div
-                          className="w-full text-center font-bold tracking-wide"
+                          className="w-full text-center font-bold tracking-wide text-black"
                           style={{ fontSize: `${0.6 * previewScale}rem` }}
                         >
                           ESTRELA METAIS
                         </div>
                         <div
-                          className="w-full text-center font-medium"
+                          className="w-full text-center font-medium text-black"
                           style={{ fontSize: `${0.6 * previewScale}rem` }}
                         >
                           {product.name_short}
                         </div>
                         <div
-                          className="w-full text-center font-medium"
+                          className="w-full text-center font-medium text-black"
                           style={{ fontSize: `${0.6 * previewScale}rem` }}
                         >
                           {product.product_code}

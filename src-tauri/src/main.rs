@@ -1,20 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use rusb::{Context, DeviceHandle, UsbContext};
 use rusqlite::OptionalExtension;
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 use tauri::{Manager, AppHandle, State};
-use once_cell::sync::Lazy;
 
-// Constantes da Argox OS-2140
-const ARGOX_VID: u16 = 0x1664;  // ID do fabricante Argox
-const ARGOX_PID: u16 = 0x013B;  // ID principal do modelo OS-2140
-const ARGOX_PID_ALT: u16 = 0x015B;  // ID alternativo do modelo OS-2140
-const TIMEOUT: Duration = Duration::from_secs(1);
+// Importar o módulo windows_printing
+mod windows_printing;
 
 // Estruturas de dados
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -50,6 +44,7 @@ pub struct PrinterConfig {
   height: u32,       // Altura em dots
   speed: u8,         // Velocidade (1-4)
   port: String,      // Porta da impressora
+  selected_printer: Option<String>, // Impressora selecionada
 }
 
 impl Default for PrinterConfig {
@@ -59,7 +54,8 @@ impl Default for PrinterConfig {
           width: 840,     // 105mm * 8 dots (3 etiquetas de 33mm + 2 espaços de 2mm)
           height: 176,    // 22mm * 8 dots
           speed: 2,       // Velocidade média
-          port: "USB".to_string(), // Porta padrão
+          port: "Windows".to_string(), // Agora o padrão é Windows
+          selected_printer: None,      // Inicialmente nenhuma impressora selecionada
       }
   }
 }
@@ -67,61 +63,9 @@ impl Default for PrinterConfig {
 // Wrapper para o banco de dados
 struct DbConnection(Arc<Mutex<Connection>>);
 
-// Estrutura para impressora USB
-pub struct UsbPrinter {
-  handle: DeviceHandle<Context>,
-  endpoint_out: u8,
-  endpoint_in: u8,
-  config: PrinterConfig,
-}
-
-// Adicione esta estrutura para simular a impressora durante o desenvolvimento
-#[derive(Debug)]
-struct MockPrinter {
-  config: PrinterConfig,
-}
-
-impl MockPrinter {
-  fn new(config: PrinterConfig) -> Self {
-      println!("[MOCK] Criando impressora simulada com configuração: {:?}", config);
-      MockPrinter { config }
-  }
-
-  fn write(&self, data: &[u8]) -> Result<usize, String> {
-      println!("[MOCK] Enviando dados para impressora: {}", String::from_utf8_lossy(data));
-      Ok(data.len())
-  }
-
-  fn read(&self, buffer: &mut [u8]) -> Result<usize, String> {
-      // Simula uma resposta da impressora
-      let response = b"OK\r\n";
-      let len = response.len().min(buffer.len());
-      buffer[..len].copy_from_slice(&response[..len]);
-      println!("[MOCK] Lendo dados da impressora: {}", String::from_utf8_lossy(&buffer[..len]));
-      Ok(len)
-  }
-
-  fn print_label(&self, text: &str) -> Result<(), String> {
-      println!("[MOCK] Imprimindo etiqueta (PPLB): {}", text);
-      Ok(())
-  }
-
-  fn test_connection(&self) -> Result<(), String> {
-      println!("[MOCK] Testando conexão com a impressora (PPLB)");
-      Ok(())
-  }
-}
-
-// Enum para representar o tipo de impressora (real ou simulada)
-enum PrinterType {
-  Real(UsbPrinter),
-  Mock(MockPrinter),
-}
-
 // Estrutura para controlar o estado da atualização
 struct UpdaterState {
   checking: AtomicBool,
-  installing: AtomicBool,  // Inicializar o novo campo
 }
 
 // Estrutura para informações de atualização
@@ -132,7 +76,7 @@ struct UpdateInfo {
   date: String,
 }
 
-// Adicionando uma nova estrutura para configurações de atualização
+// Estrutura para configurações de atualização
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct UpdateSettings {
   auto_install: bool,
@@ -142,148 +86,6 @@ impl Default for UpdateSettings {
   fn default() -> Self {
       Self {
           auto_install: false, // Desabilita instalação automática por padrão
-      }
-  }
-}
-
-// Modifique a variável global PRINTER para usar o enum PrinterType
-static PRINTER: Lazy<Mutex<Option<PrinterType>>> = Lazy::new(|| Mutex::new(None));
-
-impl UsbPrinter {
-  fn new(config: PrinterConfig) -> Result<Self, String> {
-      let context = Context::new()
-          .map_err(|e| format!("Erro ao criar contexto USB: {}", e))?;
-
-      println!("Procurando impressora Argox OS-2140...");
-      println!("VID: {:04x}, PID: {:04x} ou {:04x}", ARGOX_VID, ARGOX_PID, ARGOX_PID_ALT);
-
-      let (device, device_desc) = context
-          .devices()
-          .map_err(|e| format!("Erro ao listar dispositivos: {}", e))?
-          .iter()
-          .find(|device| {
-              device
-                  .device_descriptor()
-                  .map(|desc| {
-                      desc.vendor_id() == ARGOX_VID && 
-                      (desc.product_id() == ARGOX_PID || desc.product_id() == ARGOX_PID_ALT)
-                  })
-                  .unwrap_or(false)
-          })
-          .and_then(|device| {
-              device
-                  .device_descriptor()
-                  .map(|desc| (device, desc))
-                  .ok()
-          })
-          .ok_or("Impressora Argox OS-2140 não encontrada")?;
-
-      println!("Impressora encontrada! PID: {:04x}", device_desc.product_id());
-
-      let handle = device
-          .open()
-          .map_err(|e| format!("Erro ao abrir dispositivo: {}", e))?;
-
-      println!("Conexão aberta. Resetando dispositivo...");
-
-      handle
-          .reset()
-          .map_err(|e| format!("Erro ao resetar dispositivo: {}", e))?;
-
-      let config_desc = device
-          .config_descriptor(0)
-          .map_err(|e| format!("Erro ao ler configuração: {}", e))?;
-
-      let interface = config_desc
-          .interfaces()
-          .next()
-          .ok_or("Interface não encontrada")?;
-
-      let interface_desc = interface
-          .descriptors()
-          .next()
-          .ok_or("Descritor de interface não encontrado")?;
-
-      println!("Interface encontrada. Número: {}", interface_desc.interface_number());
-
-      handle
-          .claim_interface(interface_desc.interface_number())
-          .map_err(|e| format!("Erro ao configurar interface: {}", e))?;
-
-      let mut endpoint_out = None;
-      let mut endpoint_in = None;
-
-      for endpoint_desc in interface_desc.endpoint_descriptors() {
-          match endpoint_desc.direction() {
-              rusb::Direction::Out => {
-                  endpoint_out = Some(endpoint_desc.address());
-                  println!("Endpoint OUT encontrado: {:02x}", endpoint_desc.address());
-              },
-              rusb::Direction::In => {
-                  endpoint_in = Some(endpoint_desc.address());
-                  println!("Endpoint IN encontrado: {:02x}", endpoint_desc.address());
-              },
-          }
-      }
-
-      let endpoint_out = endpoint_out.ok_or("Endpoint de saída não encontrado")?;
-      let endpoint_in = endpoint_in.ok_or("Endpoint de entrada não encontrado")?;
-
-      println!("Endpoints configurados. Criando instância da impressora...");
-
-      Ok(UsbPrinter {
-          handle,
-          endpoint_out,
-          endpoint_in,
-          config,
-      })
-  }
-
-  fn write(&self, data: &[u8]) -> Result<usize, String> {
-      self.handle
-          .write_bulk(self.endpoint_out, data, TIMEOUT)
-          .map_err(|e| format!("Erro ao enviar dados: {}", e))
-  }
-
-  fn read(&self, buffer: &mut [u8]) -> Result<usize, String> {
-      self.handle
-          .read_bulk(self.endpoint_in, buffer, TIMEOUT)
-          .map_err(|e| format!("Erro ao ler dados: {}", e))
-  }
-
-  // Modificado para usar comandos PPLB
-  fn print_label(&self, text: &str) -> Result<(), String> {
-      let commands = vec![
-          "^XA\r\n".to_string(),                      // Iniciar formato
-          "^LH0,0\r\n".to_string(),                   // Posição inicial
-          format!("^LL{}\r\n", self.config.height),   // Altura da etiqueta
-          format!("^PW{}\r\n", self.config.width),    // Largura da etiqueta
-          format!("^PR{}\r\n", self.config.speed),    // Velocidade de impressão
-          format!("^MD{}\r\n", self.config.darkness), // Densidade de impressão
-          format!("^FO50,50^A0N,30,30^FD{}^FS\r\n", text), // Texto
-          "^PQ1\r\n".to_string(),                     // Quantidade (1 etiqueta)
-          "^XZ\r\n".to_string(),                      // Finalizar formato
-      ];
-
-      for cmd in commands {
-          self.write(cmd.as_bytes())?;
-      }
-
-      Ok(())
-  }
-
-  // Modificado para usar comandos PPLB
-  fn test_connection(&self) -> Result<(), String> {
-      // Comando de status em PPLB (^HH retorna informações de configuração)
-      self.write(b"^XA^HH^XZ\r\n")?;
-      
-      let mut buffer = [0u8; 32];
-      let read = self.read(&mut buffer)?;
-      
-      if read > 0 {
-          Ok(())
-      } else {
-          Err("Impressora não respondeu".to_string())
       }
   }
 }
@@ -347,7 +149,7 @@ fn setup_database() -> DbConnection {
   if !has_port_column {
       println!("Adicionando coluna 'port' à tabela printer_settings");
       conn.execute(
-          "ALTER TABLE printer_settings ADD COLUMN port TEXT NOT NULL DEFAULT 'USB'",
+          "ALTER TABLE printer_settings ADD COLUMN port TEXT NOT NULL DEFAULT 'Windows'",
           [],
       )
       .expect("failed to add port column to printer_settings table");
@@ -538,7 +340,7 @@ fn get_products(db: State<DbConnection>) -> Result<Vec<Product>, String> {
   Ok(result)
 }
 
-// Adicione esta função para verificar a sequência atual
+// Função para verificar a sequência atual
 #[tauri::command]
 fn get_current_sequence(db: State<DbConnection>) -> Result<i32, String> {
   let conn = db.0.lock().unwrap();
@@ -658,77 +460,87 @@ fn delete_product(id: i64, db: State<DbConnection>) -> Result<(), String> {
   }
 }
 
-// Modifique a função print_label_batch para usar PPLB
+// Função para impressão de lote usando apenas API do Windows
 #[tauri::command]
-async fn print_label_batch(products: Vec<Option<Product>>, app_handle: AppHandle) -> Result<(), String> {
+async fn print_label_batch(products: Vec<Option<Product>>, _app_handle: AppHandle, printer_name: Option<String>) -> Result<(), String> {
   println!("Iniciando impressão de lote com {} produtos...", products.len());
-  let printer_guard = PRINTER.lock().unwrap();
   
-  match &*printer_guard {
-      Some(PrinterType::Real(printer)) => {
-          println!("Usando impressora real para impressão de lote");
-          
-          // Iniciar o formato PPLB
-          let mut commands = vec![
-              "^XA\r\n".to_string(),                      // Iniciar formato
-              "^LH0,0\r\n".to_string(),                   // Posição inicial
-              format!("^LL{}\r\n", printer.config.height), // Altura da etiqueta
-              format!("^PW{}\r\n", printer.config.width),  // Largura da etiqueta
-              format!("^PR{}\r\n", printer.config.speed),  // Velocidade
-              format!("^MD{}\r\n", printer.config.darkness), // Densidade
-          ];
+  // Obter impressoras do Windows
+  let printers = windows_printing::list_windows_printers()?;
+  if printers.is_empty() {
+    return Err("Nenhuma impressora Windows encontrada. Instale uma impressora no sistema.".to_string());
+  }
+  
+  // Usar a impressora especificada ou a primeira da lista
+  let printer_to_use = match printer_name {
+    Some(name) if printers.contains(&name) => name,
+    Some(name) => {
+      println!("AVISO: Impressora solicitada '{}' não encontrada. Usando a primeira disponível.", name);
+      printers[0].clone()
+    },
+    None => {
+      println!("Impressora não especificada, usando a primeira da lista");
+      printers[0].clone()
+    }
+  };
+  
+  println!("Usando impressora Windows: {}", printer_to_use);
+  
+  // Criar o conteúdo da etiqueta para a API do Windows
+  let mut label_content = String::new();
 
           // Posições X para cada etiqueta
           let x_positions = [50, 314, 578];
 
-          // Adiciona comandos para cada etiqueta
+  let etiquetas_count = products.iter().filter(|p| p.is_some()).count();
+  println!("Gerando comandos PPLB para {} etiquetas", etiquetas_count);
+  
+  // Adiciona comandos para cada etiqueta (formato PPLB em vez de ZPL)
           for (index, product) in products.iter().enumerate() {
               if let Some(product) = product {
-                  let x = x_positions[index];
-                  commands.extend(vec![
-                      // Empresa
-                      format!("^FO{},24^A0N,20,20^FDESTRELA METAIS^FS\r\n", x),
+      let x = x_positions[index % 3];
+      
+      // Início do formato PPLB
+      label_content.push_str("N\r\n");                                // Limpa buffer (equivalente a ^XA)
+      label_content.push_str("q840\r\n");                             // Largura da etiqueta (equivalente a ^PW)
+      label_content.push_str("Q176,24\r\n");                          // Altura, gap (equivalente a ^LL)
+      label_content.push_str(&format!("D{}\r\n", 8));                 // Densidade (equivalente a ^MD)
+      label_content.push_str(&format!("S{}\r\n", 2));                 // Velocidade (equivalente a ^PR)
+      
+      // Empresa - sintaxe: A x,y,rotação,fonte,multiplier-x,multiplier-y,"texto"
+      label_content.push_str(&format!("A{},24,0,3,1,1,\"ESTRELA METAIS\"\r\n", x));
+      
                       // Nome curto do produto
-                      format!("^FO{},48^A0N,20,20^FD{}^FS\r\n", x, product.name_short),
+      label_content.push_str(&format!("A{},48,0,3,1,1,\"{}\"\r\n", x, product.name_short));
+      
                       // Código do produto
-                      format!("^FO{},72^A0N,20,20^FD{}^FS\r\n", x, product.product_code),
-                      // Código de barras
-                      format!("^FO{},96^BY2^BEN,60,Y,N^FD{}^FS\r\n", x, product.barcode),
-                  ]);
-              }
-          }
-
-          // Finalizar o formato e imprimir
-          commands.push("^PQ1\r\n".to_string());  // Quantidade (1 etiqueta)
-          commands.push("^XZ\r\n".to_string());   // Finalizar formato
-
-          for cmd in commands {
-              printer.write(cmd.as_bytes())?;
-          }
-
+      label_content.push_str(&format!("A{},72,0,3,1,1,\"{}\"\r\n", x, product.product_code));
+      
+      // Código de barras - sintaxe: B x,y,tipo,largura,altura,rotação,"dados"
+      // Tipo 2 = EAN-13, width=2, readable=1 (mostra texto)
+      label_content.push_str(&format!("B{},96,2,2,60,0,1,\"{}\"\r\n", x, product.barcode));
+      
+      // Quantidade (1 etiqueta)
+      label_content.push_str("P1\r\n");
+      
+      // Usar separador para múltiplas etiquetas
+      if index < products.len() - 1 {
+        label_content.push_str("\r\n");
+      }
+    }
+  }
+  
+  println!("Enviando trabalho de impressão para '{}' com {} bytes", printer_to_use, label_content.len());
+  
+  // Envia para a impressora Windows
+  match windows_printing::print_to_windows_printer(&printer_to_use, "Etiquetas", label_content.as_bytes()) {
+    Ok(_) => {
+      println!("Impressão enviada com sucesso para '{}'", printer_to_use);
           Ok(())
       },
-      Some(PrinterType::Mock(printer)) => {
-          println!("[MOCK] Iniciando impressão simulada de lote com {} produtos", 
-                   products.iter().filter(|p| p.is_some()).count());
-          
-          // Simula a impressão de cada produto
-          for (index, product) in products.iter().enumerate() {
-              if let Some(product) = product {
-                  println!("[MOCK] Etiqueta {}: {} - {} - {}", 
-                           index + 1, 
-                           product.name_short, 
-                           product.product_code, 
-                           product.barcode);
-              }
-          }
-          
-          println!("[MOCK] Impressão simulada de lote concluída com sucesso");
-          Ok(())
-      },
-      None => {
-          println!("Erro: Nenhuma impressora conectada (nem real nem simulada)");
-          Err("Impressora não conectada".to_string())
+    Err(e) => {
+      println!("ERRO ao enviar para impressora: {}", e);
+      Err(e)
       }
   }
 }
@@ -760,71 +572,94 @@ fn get_print_history(db: State<DbConnection>) -> Result<Vec<PrintJob>, String> {
   Ok(result)
 }
 
-// Modifique a função print_test para usar PPLB
+// Função para teste de impressão usando apenas API do Windows
 #[tauri::command]
-async fn print_test() -> Result<(), String> {
+async fn print_test(printer_name: Option<String>) -> Result<(), String> {
   println!("Iniciando teste de impressão...");
-  let printer_guard = PRINTER.lock().unwrap();
   
-  match &*printer_guard {
-      Some(PrinterType::Real(printer)) => {
-          println!("Usando impressora real para teste");
-          
-          // Comando de teste  => {
-          println!("Usando impressora real para teste");
-          
-          // Comando de teste
-          let commands = vec![
-              "^XA\r\n".to_string(),                      // Iniciar formato
-              "^LH0,0\r\n".to_string(),                   // Posição inicial
-              format!("^LL{}\r\n", printer.config.height), // Altura da etiqueta
-              format!("^PW{}\r\n", printer.config.width),  // Largura da etiqueta
-              format!("^PR{}\r\n", printer.config.speed),  // Velocidade
-              format!("^MD{}\r\n", printer.config.darkness), // Densidade
-              "^FO50,50^A0N,30,30^FDTeste de Impressão^FS\r\n".to_string(), // Texto
-              "^PQ1\r\n".to_string(),                     // Quantidade (1 etiqueta)
-              "^XZ\r\n".to_string(),                      // Finalizar formato
-          ];
-
-          for cmd in commands {
-              printer.write(cmd.as_bytes())?;
-          }
-          
+  // Obter impressoras do Windows
+  let printers = windows_printing::list_windows_printers()?;
+  if printers.is_empty() {
+    return Err("Nenhuma impressora Windows encontrada. Instale uma impressora no sistema.".to_string());
+  }
+  
+  // Usar a impressora especificada ou a primeira da lista
+  let printer_to_use = match printer_name {
+    Some(name) if printers.contains(&name) => name,
+    Some(name) => {
+      println!("AVISO: Impressora solicitada '{}' não encontrada. Usando a primeira disponível.", name);
+      printers[0].clone()
+    },
+    None => {
+      println!("Impressora não especificada, usando a primeira da lista");
+      printers[0].clone()
+    }
+  };
+  
+  println!("Usando impressora Windows para teste: {}", printer_to_use);
+  
+  // Comando de teste para Windows no formato PPLB em vez de ZPL
+  let test_content = "N\r\nq840\r\nQ176,24\r\nD8\r\nS2\r\nA50,50,0,3,1,1,\"Teste de Impressão PPLB\"\r\nP1\r\n";
+  
+  // Envia para a impressora Windows
+  match windows_printing::print_to_windows_printer(&printer_to_use, "Teste", test_content.as_bytes()) {
+    Ok(_) => {
+      println!("Teste de impressão enviado com sucesso para '{}'", printer_to_use);
           Ok(())
       },
-      Some(PrinterType::Mock(printer)) => {
-          println!("[MOCK] Iniciando teste de impressão simulada");
-          printer.print_label("Teste de Impressão")?;
-          println!("[MOCK] Teste de impressão simulada concluído com sucesso");
-          Ok(())
-      },
-      None => {
-          println!("Erro: Nenhuma impressora conectada (nem real nem simulada)");
-          Err("Impressora não conectada".to_string())
+    Err(e) => {
+      println!("ERRO ao enviar teste para impressora: {}", e);
+      Err(e)
       }
   }
 }
 
 #[tauri::command]
 async fn save_printer_settings(config: PrinterConfig, db: State<'_, DbConnection>) -> Result<(), String> {
+  println!("Salvando configurações de impressora");
+
   let conn = db.0.lock().unwrap();
 
   conn.execute("DELETE FROM printer_settings", [])
       .map_err(|e| e.to_string())?;
 
+  // Verifique se a coluna selected_printer existe
+  let has_selected_printer_column = conn
+      .query_row(
+          "SELECT COUNT(*) FROM pragma_table_info('printer_settings') WHERE name = 'selected_printer'",
+          [],
+          |row| row.get::<_, i32>(0),
+      )
+      .unwrap_or(0) > 0;
+
+  // Adicionar coluna se não existir
+  if !has_selected_printer_column {
+      println!("Adicionando coluna 'selected_printer' à tabela printer_settings");
+      conn.execute(
+          "ALTER TABLE printer_settings ADD COLUMN selected_printer TEXT",
+          [],
+      )
+      .map_err(|e| e.to_string())?;
+  }
+
+  // Preparar o valor da impressora selecionada (NULL se None)
+  let selected_printer = config.selected_printer.as_ref().map(|s| s.as_str());
+
   conn.execute(
       "INSERT INTO printer_settings (
-          darkness, width, height, speed, port
-      ) VALUES (?, ?, ?, ?, ?)",
+          darkness, width, height, speed, port, selected_printer
+      ) VALUES (?, ?, ?, ?, ?, ?)",
       params![
           config.darkness,
           config.width,
           config.height,
           config.speed,
           config.port,
+          selected_printer,
       ],
   ).map_err(|e| e.to_string())?;
 
+  println!("Configurações de impressora salvas com sucesso");
   Ok(())
 }
 
@@ -841,8 +676,33 @@ async fn get_printer_settings(db: State<'_, DbConnection>) -> Result<Option<Prin
       )
       .unwrap_or(0) > 0;
 
-  let result = if has_port_column {
-      // Se a coluna existir, usa a consulta completa
+  // Verifica se a coluna "selected_printer" existe
+  let has_selected_printer_column = conn
+      .query_row(
+          "SELECT COUNT(*) FROM pragma_table_info('printer_settings') WHERE name = 'selected_printer'",
+          [],
+          |row| row.get::<_, i32>(0),
+      )
+      .unwrap_or(0) > 0;
+
+  let result = if has_port_column && has_selected_printer_column {
+      // Se ambas as colunas existirem, usa a consulta completa
+      conn.query_row(
+          "SELECT darkness, width, height, speed, port, selected_printer FROM printer_settings LIMIT 1",
+          [],
+          |row| {
+              Ok(PrinterConfig {
+                  darkness: row.get(0)?,
+                  width: row.get(1)?,
+                  height: row.get(2)?,
+                  speed: row.get(3)?,
+                  port: row.get(4)?,
+                  selected_printer: row.get(5)?,
+              })
+          },
+      )
+  } else if has_port_column {
+      // Se apenas a coluna "port" existir
       conn.query_row(
           "SELECT darkness, width, height, speed, port FROM printer_settings LIMIT 1",
           [],
@@ -853,11 +713,12 @@ async fn get_printer_settings(db: State<'_, DbConnection>) -> Result<Option<Prin
                   height: row.get(2)?,
                   speed: row.get(3)?,
                   port: row.get(4)?,
+                  selected_printer: None,
               })
           },
       )
   } else {
-      // Se a coluna não existir, usa a consulta sem a coluna "port"
+      // Se nenhuma das novas colunas existir
       conn.query_row(
           "SELECT darkness, width, height, speed FROM printer_settings LIMIT 1",
           [],
@@ -867,7 +728,8 @@ async fn get_printer_settings(db: State<'_, DbConnection>) -> Result<Option<Prin
                   width: row.get(1)?,
                   height: row.get(2)?,
                   speed: row.get(3)?,
-                  port: "USB".to_string(), // Valor padrão
+                  port: "Windows".to_string(),
+                  selected_printer: None,
               })
           },
       )
@@ -880,299 +742,34 @@ async fn get_printer_settings(db: State<'_, DbConnection>) -> Result<Option<Prin
   }
 }
 
-// Substitua a função list_all_usb_devices completamente por esta versão:
-
+// Conexão e configuração de impressora
 #[tauri::command]
-async fn list_all_usb_devices() -> Result<Vec<String>, String> {
-  let context = Context::new()
-      .map_err(|e| format!("Erro ao criar contexto USB: {}", e))?;
-
-  let devices = context
-      .devices()
-      .map_err(|e| format!("Erro ao listar dispositivos: {}", e))?;
-
-  let mut device_info = Vec::new();
-
-  for device in devices.iter() {
-      if let Ok(desc) = device.device_descriptor() {
-          let vid = desc.vendor_id();
-          let pid = desc.product_id();
-          
-          let mut info = format!("Dispositivo: VID={:04x}, PID={:04x}", vid, pid);
-          
-          if let Ok(handle) = device.open() {
-              if let Ok(manufacturer) = handle.read_manufacturer_string_ascii(&desc) {
-                  info.push_str(&format!(", Fabricante: {}", manufacturer));
-              }
-              
-              if let Ok(product) = handle.read_product_string_ascii(&desc) {
-                  info.push_str(&format!(", Produto: {}", product));
-              }
-          }
-          
-          device_info.push(info);
-      }
-  }
-
-  Ok(device_info)
-}
-
-// Modifique a função connect_printer para tentar conectar à impressora real
-// e, se falhar, criar uma impressora simulada
-#[tauri::command]
-async fn connect_printer(config: PrinterConfig) -> Result<(), String> {
-  println!("Tentando conectar à impressora com configuração: {:?}", config);
+async fn connect_printer(config: PrinterConfig, printer_name: Option<String>) -> Result<(), String> {
+  println!("Verificando configurações de impressora: {:?}", config);
   
-  // Tenta conectar à impressora real
-  match connect_real_printer(config.clone()).await {
-      Ok(printer) => {
-          println!("Impressora real conectada com sucesso!");
-          let mut printer_guard = PRINTER.lock().unwrap();
-          *printer_guard = Some(PrinterType::Real(printer));
-          return Ok(());
-      },
-      Err(e) => {
-          println!("Não foi possível conectar à impressora real: {}", e);
-          println!("Criando impressora simulada para desenvolvimento...");
-          
-          // Cria uma impressora simulada
-          let mock_printer = MockPrinter::new(config);
-          let mut printer_guard = PRINTER.lock().unwrap();
-          *printer_guard = Some(PrinterType::Mock(mock_printer));
-          
-          println!("[MOCK] Impressora simulada criada e configurada com sucesso");
-          return Ok(());
-      }
-  }
-}
-
-// Função para tentar conectar à impressora real
-async fn connect_real_printer(config: PrinterConfig) -> Result<UsbPrinter, String> {
-  let context = Context::new()
-      .map_err(|e| format!("Erro ao criar contexto USB: {}", e))?;
-  
-  println!("Contexto USB criado com sucesso");
-  
-  let devices = context
-      .devices()
-      .map_err(|e| format!("Erro ao listar dispositivos: {}", e))?;
-  
-  println!("Encontrados {} dispositivos USB", devices.iter().count());
-  
-  // Procura a impressora
-  for device in devices.iter() {
-      if let Ok(desc) = device.device_descriptor() {
-          let vid = desc.vendor_id();
-          let pid = desc.product_id();
-          
-          println!("Verificando dispositivo: VID={:04x}, PID={:04x}", vid, pid);
-          
-          // Verifica se é a impressora Argox
-          if vid == ARGOX_VID && (pid == ARGOX_PID || pid == ARGOX_PID_ALT) {
-              println!("Encontrada impressora Argox! VID={:04x}, PID={:04x}", vid, pid);
-              
-              // Tenta abrir o dispositivo
-              match device.open() {
-                  Ok(mut handle) => {
-                      println!("Conexão aberta com sucesso");
-                      
-                      // Resetar o dispositivo
-                      if let Err(e) = handle.reset() {
-                          println!("Aviso: Não foi possível resetar o dispositivo: {}", e);
-                          // Continua mesmo se o reset falhar
-                      }
-                      
-                      // Obter configuração
-                      let config_desc = match device.config_descriptor(0) {
-                          Ok(config) => config,
-                          Err(e) => {
-                              println!("Erro ao ler configuração: {}", e);
-                              continue;
-                          }
-                      };
-                      
-                      // Encontrar interface
-                      let interface = match config_desc.interfaces().next() {
-                          Some(interface) => interface,
-                          None => {
-                              println!("Interface não encontrada");
-                              continue;
-                          }
-                      };
-                      
-                      let interface_desc = match interface.descriptors().next() {
-                          Some(desc) => desc,
-                          None => {
-                              println!("Descritor de interface não encontrado");
-                              continue;
-                          }
-                      };
-                      
-                      println!("Interface encontrada. Número: {}", interface_desc.interface_number());
-                      
-                      // Tentar desanexar o driver do kernel se estiver ativo
-                      #[cfg(any(target_os = "linux", target_os = "macos"))]
-                      {
-                          match handle.kernel_driver_active(interface_desc.interface_number()) {
-                              Ok(true) => {
-                                  println!("Driver do kernel ativo, tentando desanexar...");
-                                  if let Err(e) = handle.detach_kernel_driver(interface_desc.interface_number()) {
-                                      println!("Aviso: Não foi possível desanexar o driver: {}", e);
-                                      // Continua mesmo se falhar
-                                  }
-                              },
-                              _ => {}
-                          }
-                      }
-                      
-                      // Reivindicar a interface
-                      if let Err(e) = handle.claim_interface(interface_desc.interface_number()) {
-                          println!("Erro ao configurar interface: {}", e);
-                          continue;
-                      }
-                      
-                      // Encontrar endpoints
-                      let mut endpoint_out = None;
-                      let mut endpoint_in = None;
-                      
-                      for endpoint_desc in interface_desc.endpoint_descriptors() {
-                          match endpoint_desc.direction() {
-                              rusb::Direction::Out => {
-                                  endpoint_out = Some(endpoint_desc.address());
-                                  println!("Endpoint OUT encontrado: {:02x}", endpoint_desc.address());
-                              },
-                              rusb::Direction::In => {
-                                  endpoint_in = Some(endpoint_desc.address());
-                                  println!("Endpoint IN encontrado: {:02x}", endpoint_desc.address());
-                              },
-                          }
-                      }
-                      
-                      let endpoint_out = match endpoint_out {
-                          Some(ep) => ep,
-                          None => {
-                              println!("Endpoint de saída não encontrado");
-                              continue;
-                          }
-                      };
-                      
-                      let endpoint_in = match endpoint_in {
-                          Some(ep) => ep,
-                          None => {
-                              println!("Endpoint de entrada não encontrado");
-                              continue;
-                          }
-                      };
-                      
-                      println!("Endpoints configurados. Criando instância da impressora...");
-                      
-                      // Criar a instância da impressora
-                      let printer = UsbPrinter {
-                          handle,
-                          endpoint_out,
-                          endpoint_in,
-                          config: config.clone(),
-                      };
-                      
-                      // Testar a conexão
-                      match printer.test_connection() {
-                          Ok(_) => {
-                              println!("Teste de conexão bem-sucedido!");
-                              return Ok(printer);
-                          },
-                          Err(e) => {
-                              println!("Teste de conexão falhou: {}", e);
-                              continue;
-                          }
-                      }
-                  },
-                  Err(e) => {
-                      println!("Erro ao abrir conexão: {}", e);
-                      continue;
-                  }
-              }
-          }
-      }
+  // Obter impressoras do Windows
+  let printers = windows_printing::list_windows_printers()?;
+  if printers.is_empty() {
+    return Err("Nenhuma impressora Windows encontrada. Instale uma impressora no Windows para continuar.".to_string());
   }
   
-  // Se chegou aqui, não encontrou a impressora
-  println!("Impressora Argox não encontrada entre os dispositivos USB");
-  Err("Impressora Argox OS-2140 não encontrada".to_string())
+  // Verificar se a impressora selecionada existe
+  let printer_to_use = match printer_name {
+    Some(name) if printers.contains(&name) => name,
+    Some(name) => return Err(format!("Impressora selecionada '{}' não encontrada no sistema", name)),
+    None => printers[0].clone(),
+  };
+  
+  println!("Impressora Windows selecionada: {}. Configurações salvas.", printer_to_use);
+  Ok(())
 }
 
-// Modifique a função list_printers para também verificar a impressora simulada
+// Lista somente impressoras do Windows
 #[tauri::command]
 async fn list_printers() -> Result<Vec<String>, String> {
-  // Primeiro, verifica se há uma impressora simulada ativa
-  let printer_guard = PRINTER.lock().unwrap();
-  let mut printers = Vec::new();
-  
-  // Se houver uma impressora simulada, adiciona-a à lista
-  if let Some(PrinterType::Mock(_)) = &*printer_guard {
-      printers.push("Impressora Argox OS-2140 (Simulada)".to_string());
-  }
-  
-  // Continua com a busca por impressoras físicas
-  let context = Context::new()
-      .map_err(|e| format!("Erro ao criar contexto USB: {}", e))?;
-
-  let devices = context
-      .devices()
-      .map_err(|e| format!("Erro ao listar dispositivos: {}", e))?;
-
-  for device in devices.iter() {
-      if let Ok(desc) = device.device_descriptor() {
-          // Procura por qualquer dispositivo que possa ser uma impressora
-          if let Ok(handle) = device.open() {
-              let mut is_printer = false;
-              
-              // Verifica se é uma Argox
-              if desc.vendor_id() == ARGOX_VID && 
-                 (desc.product_id() == ARGOX_PID || desc.product_id() == ARGOX_PID_ALT) {
-                  is_printer = true;
-              }
-              
-              // Também verifica pelo nome do produto
-              if let Ok(product) = handle.read_product_string_ascii(&desc) {
-                  if product.to_lowercase().contains("argox") || 
-                     product.to_lowercase().contains("printer") || 
-                     product.to_lowercase().contains("impressora") {
-                      is_printer = true;
-                  }
-                  
-                  if is_printer {
-                      printers.push(format!("{} (VID={:04x}, PID={:04x})", 
-                                           product, desc.vendor_id(), desc.product_id()));
-                  }
-              }
-          }
-      }
-  }
-
+  let printers = windows_printing::list_windows_printers()?;
+  println!("Impressoras Windows detectadas: {:?}", printers);
   Ok(printers)
-}
-
-#[tauri::command]
-fn get_product(id: i64, db: State<DbConnection>) -> Result<Product, String> {
-  let conn = db.0.lock().unwrap();
-
-  conn.query_row(
-      "SELECT id, product_code, name, name_short, barcode, description, created_at, updated_at 
-       FROM products WHERE id = ?",
-      params![id],
-      |row| {
-          Ok(Product {
-              id: Some(row.get(0)?),
-              product_code: row.get(1)?,
-              name: row.get(2)?,
-              name_short: row.get(3)?,
-              barcode: row.get(4)?,
-              description: Some(row.get(5)?),
-              created_at: Some(row.get(6)?),
-              updated_at: Some(row.get(7)?),
-          })
-      },
-  ).map_err(|e| e.to_string())
 }
 
 // Funções de atualização automática
@@ -1309,77 +906,47 @@ async fn save_update_settings(settings: UpdateSettings, app_handle: AppHandle) -
 
 // Adicionar uma nova função para obter as configurações de atualização
 #[tauri::command]
-async fn get_update_settings(app_handle: AppHandle) -> Result<UpdateSettings, String> {
+async fn get_update_settings(_app_handle: AppHandle) -> Result<UpdateSettings, String> {
   // Aqui você pode carregar as configurações de um arquivo ou banco de dados
   // Por enquanto, retornamos o valor padrão
   Ok(UpdateSettings::default())
 }
 
-// Adicione esta função para verificar se a impressora está em modo de simulação
+// Verificar se existe impressora conectada ao sistema
 #[tauri::command]
-async fn is_printer_mock() -> Result<bool, String> {
-  let printer_guard = PRINTER.lock().unwrap();
-  
-  match &*printer_guard {
-      Some(PrinterType::Real(_)) => Ok(false),
-      Some(PrinterType::Mock(_)) => Ok(true),
-      None => Ok(true), // Se não há impressora, consideramos como modo de simulação
+async fn is_printer_connected() -> bool {
+  // Verificar se existem impressoras no Windows
+  match windows_printing::list_windows_printers() {
+    Ok(printers) if !printers.is_empty() => true,
+    _ => false
   }
 }
 
-// Adicione esta função para testar a conexão com a impressora
+// Teste de conexão com impressora Windows
 #[tauri::command]
-async fn test_printer_connection(config: PrinterConfig) -> Result<(), String> {
-  let printer_guard = PRINTER.lock().unwrap();
+async fn test_printer_connection(_config: PrinterConfig) -> Result<(), String> {
+  // Obter impressoras do Windows
+  let printers = windows_printing::list_windows_printers()?;
+  if printers.is_empty() {
+    return Err("Nenhuma impressora Windows encontrada. Instale uma impressora no sistema.".to_string());
+  }
   
-  match &*printer_guard {
-      Some(PrinterType::Real(printer)) => {
-          printer.test_connection()?;
-          Ok(())
-      },
-      Some(PrinterType::Mock(printer)) => {
-          printer.test_connection()?;
-          Ok(())
-      },
-      None => {
-          Err("Impressora não conectada".to_string())
-      }
+  println!("Testando impressora Windows: {}", printers[0]);
+  
+  // Envia um comando simples para testar
+  let test_content = "^XA\r\n^XZ\r\n";
+  match windows_printing::print_to_windows_printer(&printers[0], "Teste de Conexão", test_content.as_bytes()) {
+    Ok(_) => Ok(()),
+    Err(e) => Err(format!("Erro ao testar impressora: {}", e))
   }
 }
 
-// Adicione esta nova função para salvar as configurações da impressora simulada no banco de dados
-#[tauri::command]
-async fn initialize_mock_printer_settings(app_handle: AppHandle) -> Result<(), String> {
-  println!("[MOCK] Salvando configurações da impressora simulada no banco de dados");
-  let config = PrinterConfig::default();
-  let db = app_handle.state::<DbConnection>();
-  save_printer_settings(config, db).await
-}
-
-// Modifique a função initialize_mock_printer para registrar que precisamos salvar as configurações
-fn initialize_mock_printer() {
-  println!("Inicializando impressora simulada na inicialização...");
-  let config = PrinterConfig::default();
-  let mock_printer = MockPrinter::new(config);
-  
-  let mut printer_guard = PRINTER.lock().unwrap();
-  if printer_guard.is_none() {
-      *printer_guard = Some(PrinterType::Mock(mock_printer));
-      println!("[MOCK] Impressora simulada inicializada automaticamente na inicialização");
-      println!("[MOCK] As configurações serão salvas no banco de dados durante a inicialização da aplicação");
-  }
-}
-
-// Modifique a função main para chamar a nova função durante a inicialização
+// Função principal
 fn main() {
   // Atualizar a inicialização da estrutura UpdaterState no main()
   let updater_state = Arc::new(UpdaterState {
       checking: AtomicBool::new(false),
-      installing: AtomicBool::new(false),  // Inicializar o novo campo
   });
-
-  // Inicializar a impressora simulada antes de iniciar o aplicativo
-  initialize_mock_printer();
 
   tauri::Builder::default()
       .manage(setup_database())
@@ -1392,45 +959,14 @@ fn main() {
               check_update_on_startup(app_handle, state).await;
           });
           
-          // Inicializar configurações da impressora simulada
-          let app_handle = app.handle().clone();
-          tauri::async_runtime::spawn(async move {
-              // Aguarda um momento para garantir que o banco de dados esteja pronto
-              tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-              
-              println!("[MOCK] Tentando salvar configurações da impressora simulada...");
-              if let Err(e) = initialize_mock_printer_settings(app_handle.clone()).await {
-                  println!("Erro ao salvar configurações da impressora simulada: {}", e);
-              } else {
-                  println!("[MOCK] Configurações da impressora simulada salvas com sucesso no banco de dados");
-              }
-          });
-          
-          // Tentar listar todos os dispositivos USB para diagnóstico
-          tauri::async_runtime::spawn(async {
-              match list_all_usb_devices().await {
-                  Ok(devices) => {
-                      println!("=== DISPOSITIVOS USB DETECTADOS ===");
-                      for device in devices {
-                          println!("{}", device);
-                      }
-                      println!("==================================");
-                  },
-                  Err(e) => {
-                      println!("Erro ao listar dispositivos USB: {}", e);
-                  }
-              }
-          });
-          
           Ok(())
       })
       .invoke_handler(tauri::generate_handler![
-          // Comandos existentes...
-          create_product,
           get_products,
-          get_product,
+          create_product,
           update_product,
           delete_product,
+          get_current_sequence,
           print_label_batch,
           get_print_history,
           save_printer_settings,
@@ -1438,18 +974,12 @@ fn main() {
           connect_printer,
           print_test,
           list_printers,
-          get_current_sequence,
-          // Novos comandos de atualização
           check_update_from_backend,
           install_update_from_backend,
           save_update_settings,
           get_update_settings,
-          // Novo comando para diagnóstico
-          list_all_usb_devices,
-          is_printer_mock,
+          is_printer_connected,
           test_printer_connection,
-          // Novo comando para inicializar configurações da impressora simulada
-          initialize_mock_printer_settings,
       ])
       .run(tauri::generate_context!())
       .expect("error while running tauri application");

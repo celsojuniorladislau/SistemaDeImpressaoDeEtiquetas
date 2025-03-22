@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Package, Settings, Home, Printer } from 'lucide-react'
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 
 const menuItems = [
   {
@@ -32,7 +33,7 @@ export function Sidebar() {
   const pathname = usePathname()
 
   return (
-    <div className="w-64 bg-background border-r fixed inset-y-0 left-0">
+    <div className="w-64 bg-background border-r fixed inset-y-0 left-0 flex flex-col">
       <div className="h-14 bg-primary text-primary-foreground flex items-center px-6">
         <span className="font-semibold">Sistema de Impressão de Etiquetas</span>
       </div>
@@ -48,6 +49,14 @@ export function Sidebar() {
             </Button>
           </Link>
         ))}
+      </div>
+      
+      {/* Espaçador que empurra o ThemeToggle para o final */}
+      <div className="flex-grow"></div>
+      
+      {/* Botão de alternar tema */}
+      <div className="p-4 border-t">
+        <ThemeToggle />
       </div>
     </div>
   )

@@ -51,7 +51,7 @@ interface PrinterConfig {
 // Função utilitária para cálculos
 function calculateProductStats(selectedProducts: { [key: number]: SelectedProduct }) {
   const uniqueProductsCount = Object.keys(selectedProducts).length
-  const totalEtiquetas = Object.values(selectedProducts).reduce((total, product) => total + product.quantity * 3, 0)
+  const totalEtiquetas = Object.values(selectedProducts).reduce((total, product) => total + product.quantity, 0)
 
   return {
     uniqueProductsCount,
@@ -68,6 +68,9 @@ export default function ImpressaoPage() {
   const [printerConfig, setPrinterConfig] = useState<PrinterConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [selectedRows, setSelectedRows] = useState<number[]>([])
+  const [productMap, setProductMap] = useState<Map<number, Product>>(new Map())
+  const [printing, setPrinting] = useState(false)
 
   // Calcula estatísticas
   const { uniqueProductsCount, totalEtiquetas } = calculateProductStats(selectedProducts)
@@ -80,10 +83,8 @@ export default function ImpressaoPage() {
     // Adiciona produtos selecionados à fila
     for (const productId in selectedProducts) {
       const product = selectedProducts[productId]
-      // Para cada produto selecionado, adiciona quantidade * 3 etiquetas
+      // Para cada produto, adicionar exatamente a quantidade solicitada
       for (let i = 0; i < product.quantity; i++) {
-        printQueue.push(product)
-        printQueue.push(product)
         printQueue.push(product)
       }
     }
@@ -118,6 +119,7 @@ export default function ImpressaoPage() {
     try {
       const result = await invoke<Product[]>("get_products")
       setProducts(result)
+      setProductMap(new Map(result.map(product => [product.id!, product])))
     } catch (error) {
       console.error("Erro ao carregar produtos:", error)
       toast({
@@ -168,7 +170,7 @@ export default function ImpressaoPage() {
       let totalPrinted = 0
       const totalToPrint = Object.values(selectedProducts).reduce((acc, product) => acc + product.quantity, 0)
 
-      // Agrupa as etiquetas em conjuntos de 3
+      // Cria a fila de impressão com exatamente a quantidade especificada
       const printQueue: (Product | null)[] = []
       for (const productId in selectedProducts) {
         const product = selectedProducts[productId]
@@ -177,7 +179,7 @@ export default function ImpressaoPage() {
         }
       }
 
-      // Imprime em grupos de 3
+      // Imprime em grupos de 3 (isso é limitação física da impressora)
       for (let i = 0; i < printQueue.length; i += 3) {
         const batch = printQueue.slice(i, i + 3)
         // Se o batch tiver menos que 3 etiquetas, completa com null
@@ -244,6 +246,78 @@ export default function ImpressaoPage() {
       product.barcode.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
+  const printSelectedProducts = async () => {
+    if (!printerConfig) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Configure a impressora antes de imprimir.",
+      })
+      return
+    }
+
+    setLoading(true)
+    try {
+      setPrinting(true)
+      
+      // Mostra toast de início
+      toast({
+        title: "Iniciando impressão",
+        description: `Preparando ${selectedRows.length} etiqueta(s) para impressão`,
+      })
+      
+      console.log(`Preparando impressão de ${selectedRows.length} etiquetas`)
+      const batch = selectedRows.map(id => productMap.get(id))
+
+      // Obter configurações para pegar a impressora selecionada
+      const config = await invoke<any>("get_printer_settings")
+      const printerName = config?.selected_printer || null
+      
+      console.log(`Usando impressora: ${printerName || "Padrão"}`)
+      toast({
+        title: "Enviando para impressora",
+        description: `Usando impressora: ${printerName || "Padrão"}`,
+      })
+
+      // Envia o lote com o nome da impressora selecionada
+      await invoke("print_label_batch", { 
+        products: batch,
+        printerName: printerName
+      })
+
+      console.log(`${selectedRows.length} etiquetas enviadas com sucesso`)
+      toast({
+        variant: "default",
+        title: "Sucesso",
+        description: `${selectedRows.length} etiqueta(s) impressa(s) com sucesso`,
+      })
+
+      // Registra impressão no histórico
+      for (const product of batch) {
+        if (product) {
+          await invoke("add_print_job", {
+            productId: product.id,
+            productName: product.name,
+            productCode: product.product_code,
+          })
+        }
+      }
+      
+      // Recarrega o histórico após a impressão
+      await loadPrintHistory()
+    } catch (error) {
+      console.error("Erro ao imprimir:", error)
+      toast({
+        variant: "destructive",
+        title: "Erro ao imprimir etiquetas",
+        description: String(error),
+      })
+    } finally {
+      setPrinting(false)
+      setLoading(false)
+    }
+  }
+
   if (initialLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -286,11 +360,11 @@ export default function ImpressaoPage() {
             )}
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
-            {/* Botão de visualização só aparece quando há produtos selecionados */}
+            {/* Outros botões existentes */}
             {hasSelectedProducts && (
               <LabelPreviewDialog
                 products={previewData()}
-                disabled={false} // Removido disabled pois já estamos controlando a visibilidade
+                disabled={false} 
               />
             )}
             <Button
@@ -348,7 +422,7 @@ export default function ImpressaoPage() {
                   <TableHead>Código do Produto</TableHead>
                   <TableHead>Codigo de Barras</TableHead>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Quantidade (de 3 em 3 etiquetas)</TableHead>
+                  <TableHead>Quantidade de Etiquetas</TableHead>
                   <TableHead className="text-right">Selecionar</TableHead>
                 </TableRow>
               </TableHeader>
