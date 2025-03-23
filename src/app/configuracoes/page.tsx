@@ -38,41 +38,77 @@ export default function ConfiguracaoPage() {
   const [loadingConfig, setLoadingConfig] = useState(true)
   const [initialLoad, setInitialLoad] = useState(true)
 
-  const searchPrinters = async (showToasts = true) => {
-    setDebugInfo("Procurando impressoras no Windows...")
+  // Função para processar impressoras e atualizar estados
+  const processPrinters = (found: string[]) => {
+    setPrinters(found);
+    setDebugInfo(`Impressoras encontradas: ${found.join(", ")}`);
+    
+    // Se houver impressoras e nenhuma estiver selecionada, selecione a primeira
+    if (!selectedPrinter && found.length > 0) {
+      setSelectedPrinter(found[0]);
+    }
+    
+    // Salvar no localStorage para evitar consultas desnecessárias
     try {
-      const found = await invoke<string[]>("list_printers")
-      setPrinters(found)
-      setDebugInfo(`Impressoras encontradas: ${found.join(", ")}`)
+      localStorage.setItem('cachedPrinters', JSON.stringify(found));
+      localStorage.setItem('printersCacheTime', Date.now().toString());
+    } catch (error) {
+      console.error("Erro ao salvar cache de impressoras:", error);
+    }
+  };
 
+  const searchPrinters = async (showToasts = true, silent = false) => {
+    if (!silent) {
+      setDebugInfo("Procurando impressoras no Windows...");
+    }
+    
+    // Primeiro tenta mostrar as impressoras em cache enquanto carrega
+    try {
+      const cachedPrinters = localStorage.getItem('cachedPrinters');
+      const cacheTime = localStorage.getItem('printersCacheTime');
+      
+      // Se tiver um cache recente (menos de 5 minutos), use-o inicialmente
+      const cacheAgeMs = cacheTime ? Date.now() - parseInt(cacheTime) : Infinity;
+      if (cachedPrinters && cacheAgeMs < 5 * 60 * 1000) {
+        const cached = JSON.parse(cachedPrinters);
+        if (Array.isArray(cached) && cached.length > 0) {
+          processPrinters(cached);
+          // Se o cache for muito recente (menos de 30 segundos), nem faz nova busca
+          if (cacheAgeMs < 30 * 1000 && !showToasts) {
+            return;
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao acessar cache:", error);
+    }
+    
+    try {
+      // Adicionar parâmetro para solicitar operação silenciosa que não cause flash de tela
+      const found = await invoke<string[]>("list_printers", { silent: true });
+      processPrinters(found);
+      
       if (found.length === 0) {
         if (showToasts) {
           toast.error("Nenhuma impressora encontrada no Windows", {
             description: "Instale uma impressora no Windows para continuar.",
-          })
+          });
         }
-      } else {
-        // Se houver impressoras e nenhuma estiver selecionada, selecione a primeira
-        if (!selectedPrinter && found.length > 0) {
-          setSelectedPrinter(found[0])
-        }
-        
-        if (showToasts) {
-          toast.success("Impressoras encontradas!", {
-            description: `${found.length} impressora(s) disponível(is)`,
-          })
-        }
+      } else if (showToasts) {
+        toast.success("Impressoras encontradas!", {
+          description: `${found.length} impressora(s) disponível(is)`,
+        });
       }
     } catch (error) {
-      console.error("Erro ao procurar impressoras:", error)
-      setDebugInfo(`Erro: ${error}`)
+      console.error("Erro ao procurar impressoras:", error);
+      setDebugInfo(`Erro: ${error}`);
       if (showToasts) {
         toast.error("Erro ao procurar impressoras", {
           description: String(error),
-        })
+        });
       }
     }
-  }
+  };
 
   const loadSavedConfig = async () => {
     setLoadingConfig(true)
@@ -127,12 +163,18 @@ export default function ConfiguracaoPage() {
         console.error("Erro ao obter versão:", error);
       }
 
-      await loadSavedConfig();
-      await searchPrinters(false);
+      // Carregar configuração e impressoras em paralelo para melhor desempenho
+      await Promise.all([
+        loadSavedConfig(),
+        searchPrinters(false)
+      ]);
+      
       setInitialLoad(false);
     };
 
     loadData();
+    
+    // Este efeito deve executar apenas uma vez na montagem do componente
   }, []);
 
   const saveConfig = async () => {
@@ -223,10 +265,24 @@ export default function ConfiguracaoPage() {
         <div>
           <h1 className="text-2xl font-bold">Configuração da Impressora</h1>
         </div>
-        <Button variant="outline" onClick={() => searchPrinters(true)} className="flex items-center gap-2">
-          <RefreshCcw className="h-4 w-4" />
-          Atualizar Lista
-        </Button>
+        {loading ? (
+          <Button variant="outline" disabled className="flex items-center gap-2">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
+            Atualizando...
+          </Button>
+        ) : (
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setLoading(true);
+              searchPrinters(true, true).finally(() => setLoading(false));
+            }} 
+            className="flex items-center gap-2"
+          >
+            <RefreshCcw className="h-4 w-4" />
+            Atualizar Lista
+          </Button>
+        )}
       </div>
 
       {initialLoad ? (

@@ -766,8 +766,16 @@ async fn connect_printer(config: PrinterConfig, printer_name: Option<String>) ->
 
 // Lista somente impressoras do Windows
 #[tauri::command]
-async fn list_printers() -> Result<Vec<String>, String> {
-  let printers = windows_printing::list_windows_printers()?;
+async fn list_printers(silent: Option<bool>) -> Result<Vec<String>, String> {
+  // Usar a versão silenciosa se solicitado, caso contrário usar a versão padrão
+  let printers = if silent.unwrap_or(false) {
+    println!("Listando impressoras Windows em modo silencioso...");
+    windows_printing::list_windows_printers_silent()?
+  } else {
+    println!("Listando impressoras Windows com interface padrão...");
+    windows_printing::list_windows_printers()?
+  };
+  
   println!("Impressoras Windows detectadas: {:?}", printers);
   Ok(printers)
 }

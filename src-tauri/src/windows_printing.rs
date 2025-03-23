@@ -1,6 +1,7 @@
 use std::ffi::OsStr;
 use std::io::Write;
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::process::CommandExt;
 use tempfile::NamedTempFile;
 use windows_sys::Win32::Foundation::HANDLE;
 use windows_sys::Win32::Graphics::Printing::{
@@ -151,6 +152,31 @@ pub fn list_windows_printers() -> Result<Vec<String>, String> {
     // Por enquanto, vamos usar um comando do sistema
     let output = std::process::Command::new("powershell.exe")
         .args(&["-Command", "Get-Printer | Select-Object -ExpandProperty Name"])
+        .output()
+        .map_err(|e| format!("Erro ao listar impressoras: {}", e))?;
+    
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let printers = stdout
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    
+    Ok(printers)
+}
+
+// Versão sem mostrar janela de terminal
+pub fn list_windows_printers_silent() -> Result<Vec<String>, String> {
+    // Usando a mesma função PowerShell mas com flags para esconder a janela
+    let output = std::process::Command::new("powershell.exe")
+        .args(&[
+            "-WindowStyle", "Hidden", 
+            "-NoProfile", 
+            "-NonInteractive", 
+            "-Command", 
+            "Get-Printer | Select-Object -ExpandProperty Name"
+        ])
+        .creation_flags(0x08000000) // CREATE_NO_WINDOW flag
         .output()
         .map_err(|e| format!("Erro ao listar impressoras: {}", e))?;
     
