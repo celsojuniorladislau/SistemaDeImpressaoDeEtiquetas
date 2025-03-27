@@ -1,262 +1,67 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { invoke } from "@tauri-apps/api/tauri"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { toast } from "sonner"
-import { Printer, RefreshCcw, Settings, AlertCircle, Info } from "lucide-react"
+import { Printer, RefreshCcw, Settings, AlertCircle } from "lucide-react"
 import { getVersion } from "@tauri-apps/api/app"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-
-interface PrinterConfig {
-  darkness: number
-  width: number
-  height: number
-  speed: number
-  port: string
-  selectedPrinter?: string
-}
+import { usePrinter } from "@/contexts/printer-context"
 
 export default function ConfiguracaoPage() {
-  const [loading, setLoading] = useState(false)
-  const [printers, setPrinters] = useState<string[]>([])
+  const {
+    printers,
+    selectedPrinter,
+    setSelectedPrinter,
+    config,
+    updateConfig,
+    loading,
+    searchPrinters,
+    saveConfig,
+    testPrint,
+  } = usePrinter()
+
   const [version, setVersion] = useState<string>("")
-  const [config, setConfig] = useState<PrinterConfig>({
-    darkness: 8,
-    width: 400,
-    height: 240,
-    speed: 2,
-    port: "Windows",
-  })
-  const [selectedPrinter, setSelectedPrinter] = useState<string>("")
   const [debugInfo, setDebugInfo] = useState<string>("")
-  const [loadingConfig, setLoadingConfig] = useState(true)
-  const [initialLoad, setInitialLoad] = useState(true)
-
-  // Função para processar impressoras e atualizar estados
-  const processPrinters = (found: string[]) => {
-    setPrinters(found);
-    setDebugInfo(`Impressoras encontradas: ${found.join(", ")}`);
-    
-    // Se houver impressoras e nenhuma estiver selecionada, selecione a primeira
-    if (!selectedPrinter && found.length > 0) {
-      setSelectedPrinter(found[0]);
-    }
-    
-    // Salvar no localStorage para evitar consultas desnecessárias
-    try {
-      localStorage.setItem('cachedPrinters', JSON.stringify(found));
-      localStorage.setItem('printersCacheTime', Date.now().toString());
-    } catch (error) {
-      console.error("Erro ao salvar cache de impressoras:", error);
-    }
-  };
-
-  const searchPrinters = async (showToasts = true, silent = false) => {
-    if (!silent) {
-      setDebugInfo("Procurando impressoras no Windows...");
-    }
-    
-    // Primeiro tenta mostrar as impressoras em cache enquanto carrega
-    try {
-      const cachedPrinters = localStorage.getItem('cachedPrinters');
-      const cacheTime = localStorage.getItem('printersCacheTime');
-      
-      // Se tiver um cache recente (menos de 5 minutos), use-o inicialmente
-      const cacheAgeMs = cacheTime ? Date.now() - parseInt(cacheTime) : Infinity;
-      if (cachedPrinters && cacheAgeMs < 5 * 60 * 1000) {
-        const cached = JSON.parse(cachedPrinters);
-        if (Array.isArray(cached) && cached.length > 0) {
-          processPrinters(cached);
-          // Se o cache for muito recente (menos de 30 segundos), nem faz nova busca
-          if (cacheAgeMs < 30 * 1000 && !showToasts) {
-            return;
-          }
-        }
-      }
-    } catch (error) {
-      console.error("Erro ao acessar cache:", error);
-    }
-    
-    try {
-      // Adicionar parâmetro para solicitar operação silenciosa que não cause flash de tela
-      const found = await invoke<string[]>("list_printers", { silent: true });
-      processPrinters(found);
-      
-      if (found.length === 0) {
-        if (showToasts) {
-          toast.error("Nenhuma impressora encontrada no Windows", {
-            description: "Instale uma impressora no Windows para continuar.",
-          });
-        }
-      } else if (showToasts) {
-        toast.success("Impressoras encontradas!", {
-          description: `${found.length} impressora(s) disponível(is)`,
-        });
-      }
-    } catch (error) {
-      console.error("Erro ao procurar impressoras:", error);
-      setDebugInfo(`Erro: ${error}`);
-      if (showToasts) {
-        toast.error("Erro ao procurar impressoras", {
-          description: String(error),
-        });
-      }
-    }
-  };
-
-  const loadSavedConfig = async () => {
-    setLoadingConfig(true)
-    try {
-      const savedConfig = await invoke<PrinterConfig | null>("get_printer_settings")
-      if (savedConfig) {
-        setConfig(savedConfig)
-        // Se houver uma impressora salva nas configurações, selecione-a
-        if (savedConfig.selectedPrinter) {
-          setSelectedPrinter(savedConfig.selectedPrinter)
-        }
-        setDebugInfo("Configurações carregadas com sucesso")
-      }
-    } catch (error) {
-      console.error("Erro ao carregar configurações:", error)
-      setDebugInfo(`Erro ao carregar configurações: ${error}`)
-    } finally {
-      setLoadingConfig(false)
-    }
-  }
-
-  const testPrint = async () => {
-    if (!selectedPrinter) {
-      toast.error("Nenhuma impressora selecionada", {
-        description: "Selecione uma impressora primeiro",
-      })
-      return
-    }
-    
-    setDebugInfo(`Enviando teste de impressão para ${selectedPrinter}...`)
-    try {
-      await invoke("print_test", { printerName: selectedPrinter })
-      
-      setDebugInfo("Teste de impressão enviado com sucesso")
-      toast.success("Teste enviado!", {
-        description: "Verifique a impressora",
-      })
-    } catch (error) {
-      setDebugInfo(`Erro no teste: ${error}`)
-      toast.error("Erro ao imprimir teste", {
-        description: String(error),
-      })
-    }
-  }
 
   useEffect(() => {
-    const loadData = async () => {
+    const loadVersion = async () => {
       try {
-        const v = await getVersion();
-        setVersion(v);
+        const v = await getVersion()
+        setVersion(v)
       } catch (error) {
-        console.error("Erro ao obter versão:", error);
+        console.error("Erro ao obter versão:", error)
       }
-
-      // Carregar configuração e impressoras em paralelo para melhor desempenho
-      await Promise.all([
-        loadSavedConfig(),
-        searchPrinters(false)
-      ]);
-      
-      setInitialLoad(false);
-    };
-
-    loadData();
-    
-    // Este efeito deve executar apenas uma vez na montagem do componente
-  }, []);
-
-  const saveConfig = async () => {
-    if (!selectedPrinter) {
-      toast.error("Nenhuma impressora selecionada", {
-        description: "Selecione uma impressora primeiro",
-      })
-      return
     }
-    
-    setLoading(true)
-    setDebugInfo("Salvando configurações...")
-    try {
-      // Criar objeto completo com o valor padrão port = "Windows" e a impressora selecionada
-      const fullConfig = {
-        ...config,
-        port: "Windows",
-        selectedPrinter: selectedPrinter
-      };
-      
-      await invoke("save_printer_settings", { config: fullConfig })
-      await invoke("connect_printer", { config: fullConfig, printerName: selectedPrinter })
 
-      setDebugInfo("Configurações salvas com sucesso")
-      toast.success("Configurações salvas!", {
-        description: "Parâmetros de impressão atualizados.",
-      })
-    } catch (error) {
-      setDebugInfo(`Erro ao salvar: ${error}`)
-      toast.error("Erro ao salvar configurações", {
-        description: String(error),
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
+    loadVersion()
+  }, [])
 
   const handlePrinterChange = (value: string) => {
-    setSelectedPrinter(value);
-    setDebugInfo(`Impressora selecionada: ${value}`);
-    
-    // Salvar configuração automaticamente quando uma impressora é selecionada
-    // Usar setTimeout para garantir que o estado foi atualizado antes de chamar saveConfig
-    setTimeout(() => {
-      saveConfigWithSelectedPrinter(value);
-    }, 100);
-  };
+    setSelectedPrinter(value)
+    setDebugInfo(`Impressora selecionada: ${value}`)
+  }
 
-  // Nova função que utiliza um valor específico da impressora em vez de depender do estado
-  const saveConfigWithSelectedPrinter = async (printerName: string) => {
-    if (!printerName) {
-      toast.error("Nenhuma impressora selecionada", {
-        description: "Selecione uma impressora primeiro",
-      })
-      return
-    }
-    
-    setLoading(true)
-    setDebugInfo("Salvando configurações automaticamente...")
-    try {
-      // Criar objeto completo com o valor padrão port = "Windows" e a impressora selecionada
-      const fullConfig = {
-        ...config,
-        port: "Windows",
-        selectedPrinter: printerName
-      };
-      
-      await invoke("save_printer_settings", { config: fullConfig })
-      await invoke("connect_printer", { config: fullConfig, printerName })
+  const handleTestPrint = async () => {
+    setDebugInfo(`Enviando teste de impressão para ${selectedPrinter}...`)
+    await testPrint()
+    setDebugInfo("Teste de impressão enviado com sucesso")
+  }
 
-      setDebugInfo("Configurações salvas automaticamente")
-      toast.success("Impressora configurada!", {
-        description: `${printerName} foi configurada como impressora padrão.`,
-      })
-    } catch (error) {
-      setDebugInfo(`Erro ao salvar: ${error}`)
-      toast.error("Erro ao configurar impressora", {
-        description: String(error),
-      })
-    } finally {
-      setLoading(false)
-    }
+  const handleSaveConfig = async () => {
+    setDebugInfo("Salvando configurações...")
+    await saveConfig()
+    setDebugInfo("Configurações salvas com sucesso")
+  }
+
+  const handleRefreshPrinters = async () => {
+    setDebugInfo("Procurando impressoras no Windows...")
+    await searchPrinters(true, true)
+    setDebugInfo(`Impressoras encontradas: ${printers.join(", ")}`)
   }
 
   return (
@@ -265,27 +70,22 @@ export default function ConfiguracaoPage() {
         <div>
           <h1 className="text-2xl font-bold">Configuração da Impressora</h1>
         </div>
-        {loading ? (
-          <Button variant="outline" disabled className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          onClick={handleRefreshPrinters}
+          disabled={loading}
+          className="flex items-center gap-2"
+        >
+          {loading ? (
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent"></div>
-            Atualizando...
-          </Button>
-        ) : (
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              setLoading(true);
-              searchPrinters(true, true).finally(() => setLoading(false));
-            }} 
-            className="flex items-center gap-2"
-          >
+          ) : (
             <RefreshCcw className="h-4 w-4" />
-            Atualizar Lista
-          </Button>
-        )}
+          )}
+          {loading ? "Atualizando..." : "Atualizar Lista"}
+        </Button>
       </div>
 
-      {initialLoad ? (
+      {loading && printers.length === 0 ? (
         <Card>
           <CardContent className="p-6">
             <div className="flex flex-col items-center justify-center space-y-3">
@@ -316,7 +116,7 @@ export default function ConfiguracaoPage() {
                 ))}
               </SelectContent>
             </Select>
-            
+
             {/* Status da Impressora */}
             <div className="flex items-center justify-between p-3 bg-muted rounded-md">
               <div className="flex items-center gap-2">
@@ -371,8 +171,8 @@ export default function ConfiguracaoPage() {
             <CardHeader>
               <CardTitle>Configurações de Impressão</CardTitle>
               <CardDescription>
-                Ajuste os parâmetros de impressão para a impressora do Windows. 
-                A impressora selecionada é configurada automaticamente.
+                Ajuste os parâmetros de impressão para a impressora do Windows. A impressora selecionada é configurada
+                automaticamente.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -381,7 +181,7 @@ export default function ConfiguracaoPage() {
                 <div className="flex items-center gap-4">
                   <Slider
                     value={[config.darkness]}
-                    onValueChange={(value) => setConfig((prev) => ({ ...prev, darkness: value[0] }))}
+                    onValueChange={(value) => updateConfig({ darkness: value[0] })}
                     min={1}
                     max={15}
                     step={1}
@@ -397,7 +197,7 @@ export default function ConfiguracaoPage() {
                 <div className="flex items-center gap-4">
                   <Slider
                     value={[config.speed]}
-                    onValueChange={(value) => setConfig((prev) => ({ ...prev, speed: value[0] }))}
+                    onValueChange={(value) => updateConfig({ speed: value[0] })}
                     min={1}
                     max={4}
                     step={1}
@@ -414,7 +214,7 @@ export default function ConfiguracaoPage() {
                   <Input
                     type="number"
                     value={config.width}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, width: Number.parseInt(e.target.value) || 0 }))}
+                    onChange={(e) => updateConfig({ width: Number.parseInt(e.target.value) || 0 })}
                     min={0}
                   />
                   <p className="text-sm text-muted-foreground">8 dots = 1mm</p>
@@ -425,23 +225,23 @@ export default function ConfiguracaoPage() {
                   <Input
                     type="number"
                     value={config.height}
-                    onChange={(e) => setConfig((prev) => ({ ...prev, height: Number.parseInt(e.target.value) || 0 }))}
+                    onChange={(e) => updateConfig({ height: Number.parseInt(e.target.value) || 0 })}
                     min={0}
                   />
                   <p className="text-sm text-muted-foreground">8 dots = 1mm</p>
                 </div>
               </div>
 
-              <Button 
-                onClick={saveConfig} 
-                disabled={loading || printers.length === 0 || !selectedPrinter} 
+              <Button
+                onClick={handleSaveConfig}
+                disabled={loading || printers.length === 0 || !selectedPrinter}
                 className="w-full"
               >
                 {loading ? "Salvando..." : "Atualizar Configurações de Impressão"}
               </Button>
               <p className="text-xs text-center text-muted-foreground">
-                As alterações de densidade, velocidade e dimensões precisam ser confirmadas pelo botão acima.
-                A seleção da impressora é salva automaticamente.
+                As alterações de densidade, velocidade e dimensões precisam ser confirmadas pelo botão acima. A seleção
+                da impressora é salva automaticamente.
               </p>
             </CardContent>
           </Card>
@@ -454,11 +254,7 @@ export default function ConfiguracaoPage() {
               <CardDescription>Imprima uma etiqueta de teste para verificar as configurações</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button 
-                onClick={testPrint} 
-                disabled={printers.length === 0 || !selectedPrinter} 
-                className="w-full"
-              >
+              <Button onClick={handleTestPrint} disabled={printers.length === 0 || !selectedPrinter} className="w-full">
                 <Printer className="mr-2 h-4 w-4" />
                 Imprimir Teste
               </Button>
@@ -475,9 +271,7 @@ export default function ConfiguracaoPage() {
         </TabsContent>
       </Tabs>
 
-      <div className="text-xs text-muted-foreground mt-8 text-right">
-        Versão: {version || "Carregando..."}
-      </div>
+      <div className="text-xs text-muted-foreground mt-8 text-right">Versão: {version || "Carregando..."}</div>
     </div>
   )
 }

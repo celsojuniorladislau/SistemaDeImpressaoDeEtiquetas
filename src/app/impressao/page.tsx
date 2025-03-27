@@ -8,11 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Printer, Search, AlertCircle, Loader2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
-import { toast } from "@/components/ui/use-toast"
+import { toast } from "sonner"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { LabelPreviewDialog } from "@/components/LabelPreviewDialog"
-import { CheckSquare } from 'lucide-react' // Adicione este import junto com os outros ícones
+import { CheckSquare } from "lucide-react"
+import { usePrinter } from "@/contexts/printer-context"
 
 // Interfaces
 interface Product {
@@ -39,15 +40,6 @@ interface SelectedProduct extends Product {
   quantity: number
 }
 
-interface PrinterConfig {
-  port: string
-  baud_rate: number
-  density: number
-  width: number
-  height: number
-  speed: number
-}
-
 // Função utilitária para cálculos
 function calculateProductStats(selectedProducts: { [key: number]: SelectedProduct }) {
   const uniqueProductsCount = Object.keys(selectedProducts).length
@@ -60,12 +52,14 @@ function calculateProductStats(selectedProducts: { [key: number]: SelectedProduc
 }
 
 export default function ImpressaoPage() {
+  // Contexto da impressora
+  const { selectedPrinter, config } = usePrinter()
+
   // Estados
   const [products, setProducts] = useState<Product[]>([])
   const [printHistory, setPrintHistory] = useState<PrintJob[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedProducts, setSelectedProducts] = useState<{ [key: number]: SelectedProduct }>({})
-  const [printerConfig, setPrinterConfig] = useState<PrinterConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [selectedRows, setSelectedRows] = useState<number[]>([])
@@ -75,6 +69,7 @@ export default function ImpressaoPage() {
   // Calcula estatísticas
   const { uniqueProductsCount, totalEtiquetas } = calculateProductStats(selectedProducts)
   const hasSelectedProducts = Object.keys(selectedProducts).length > 0
+  const isPrinterConfigured = !!selectedPrinter
 
   // Função para preparar os dados do preview
   const previewData = () => {
@@ -93,39 +88,15 @@ export default function ImpressaoPage() {
   }
 
   // Funções de carregamento
-  const loadPrinterConfig = useCallback(async () => {
-    try {
-      const config = await invoke<PrinterConfig | null>("get_printer_settings")
-      setPrinterConfig(config)
-
-      if (!config) {
-        toast({
-          variant: "default",
-          title: "Atenção",
-          description: "Impressora não configurada. Configure a impressora antes de imprimir.",
-        })
-      }
-    } catch (error) {
-      console.error("Erro ao carregar configurações da impressora:", error)
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Erro ao carregar configurações da impressora.",
-      })
-    }
-  }, [])
-
   const loadProducts = useCallback(async () => {
     try {
       const result = await invoke<Product[]>("get_products")
       setProducts(result)
-      setProductMap(new Map(result.map(product => [product.id!, product])))
+      setProductMap(new Map(result.map((product) => [product.id!, product])))
     } catch (error) {
       console.error("Erro ao carregar produtos:", error)
-      toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Não foi possível carregar os produtos.",
+      toast.error("Não foi possível carregar os produtos.", {
+        description: String(error),
       })
     }
   }, [])
@@ -143,7 +114,7 @@ export default function ImpressaoPage() {
   useEffect(() => {
     const initializePage = async () => {
       try {
-        await Promise.all([loadProducts(), loadPrintHistory(), loadPrinterConfig()])
+        await Promise.all([loadProducts(), loadPrintHistory()])
       } catch (error) {
         console.error("Erro ao inicializar página:", error)
       } finally {
@@ -152,14 +123,12 @@ export default function ImpressaoPage() {
     }
 
     initializePage()
-  }, [loadProducts, loadPrintHistory, loadPrinterConfig])
+  }, [loadProducts, loadPrintHistory])
 
   // Funções de manipulação
   const handlePrintSelected = async () => {
-    if (!printerConfig) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
+    if (!selectedPrinter) {
+      toast.error("Erro", {
         description: "Configure a impressora antes de imprimir.",
       })
       return
@@ -187,12 +156,15 @@ export default function ImpressaoPage() {
           batch.push(null)
         }
 
-        await invoke("print_label_batch", { products: batch })
+        await invoke("print_label_batch", {
+          products: batch,
+          printerName: selectedPrinter,
+        })
+
         totalPrinted += batch.filter((p) => p !== null).length
 
         // Atualiza o progresso
-        toast({
-          title: "Imprimindo...",
+        toast.info("Imprimindo...", {
           description: `Etiqueta ${totalPrinted} de ${totalToPrint}`,
         })
 
@@ -200,8 +172,7 @@ export default function ImpressaoPage() {
         await new Promise((resolve) => setTimeout(resolve, 1000))
       }
 
-      toast({
-        title: "Sucesso",
+      toast.success("Sucesso", {
         description: `${totalPrinted} etiqueta(s) impressa(s) com sucesso!`,
       })
 
@@ -209,9 +180,7 @@ export default function ImpressaoPage() {
       setSelectedProducts({})
     } catch (error) {
       console.error("Erro ao imprimir:", error)
-      toast({
-        variant: "destructive",
-        title: "Erro de Impressão",
+      toast.error("Erro de Impressão", {
         description: "Verifique se a impressora está conectada e configurada corretamente.",
       })
     } finally {
@@ -247,10 +216,8 @@ export default function ImpressaoPage() {
   )
 
   const printSelectedProducts = async () => {
-    if (!printerConfig) {
-      toast({
-        variant: "destructive",
-        title: "Erro",
+    if (!selectedPrinter) {
+      toast.error("Erro", {
         description: "Configure a impressora antes de imprimir.",
       })
       return
@@ -259,36 +226,28 @@ export default function ImpressaoPage() {
     setLoading(true)
     try {
       setPrinting(true)
-      
+
       // Mostra toast de início
-      toast({
-        title: "Iniciando impressão",
+      toast.info("Iniciando impressão", {
         description: `Preparando ${selectedRows.length} etiqueta(s) para impressão`,
       })
-      
-      console.log(`Preparando impressão de ${selectedRows.length} etiquetas`)
-      const batch = selectedRows.map(id => productMap.get(id))
 
-      // Obter configurações para pegar a impressora selecionada
-      const config = await invoke<any>("get_printer_settings")
-      const printerName = config?.selected_printer || null
-      
-      console.log(`Usando impressora: ${printerName || "Padrão"}`)
-      toast({
-        title: "Enviando para impressora",
-        description: `Usando impressora: ${printerName || "Padrão"}`,
+      console.log(`Preparando impressão de ${selectedRows.length} etiquetas`)
+      const batch = selectedRows.map((id) => productMap.get(id))
+
+      console.log(`Usando impressora: ${selectedPrinter || "Padrão"}`)
+      toast.info("Enviando para impressora", {
+        description: `Usando impressora: ${selectedPrinter || "Padrão"}`,
       })
 
       // Envia o lote com o nome da impressora selecionada
-      await invoke("print_label_batch", { 
+      await invoke("print_label_batch", {
         products: batch,
-        printerName: printerName
+        printerName: selectedPrinter,
       })
 
       console.log(`${selectedRows.length} etiquetas enviadas com sucesso`)
-      toast({
-        variant: "default",
-        title: "Sucesso",
+      toast.success("Sucesso", {
         description: `${selectedRows.length} etiqueta(s) impressa(s) com sucesso`,
       })
 
@@ -302,14 +261,12 @@ export default function ImpressaoPage() {
           })
         }
       }
-      
+
       // Recarrega o histórico após a impressão
       await loadPrintHistory()
     } catch (error) {
       console.error("Erro ao imprimir:", error)
-      toast({
-        variant: "destructive",
-        title: "Erro ao imprimir etiquetas",
+      toast.error("Erro ao imprimir etiquetas", {
         description: String(error),
       })
     } finally {
@@ -332,7 +289,9 @@ export default function ImpressaoPage() {
   return (
     <div className="container mx-auto p-4">
       <div className="flex flex-col gap-6 max-w-full">
-        {!printerConfig && (
+        
+
+        {!isPrinterConfigured && (
           <Alert variant="default">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription className="flex items-center gap-2">
@@ -340,7 +299,7 @@ export default function ImpressaoPage() {
               <Button
                 variant="link"
                 className="px-2 py-0 h-auto"
-                onClick={() => (window.location.href = "/configuracoes")}
+                onClick={() => (window.location.href = "/configuracao")}
               >
                 Configurar agora
               </Button>
@@ -361,16 +320,11 @@ export default function ImpressaoPage() {
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             {/* Outros botões existentes */}
-            {hasSelectedProducts && (
-              <LabelPreviewDialog
-                products={previewData()}
-                disabled={false} 
-              />
-            )}
+            {hasSelectedProducts && <LabelPreviewDialog products={previewData()} disabled={false} />}
             <Button
               onClick={handlePrintSelected}
               className="transition-opacity duration-300"
-              disabled={!hasSelectedProducts || loading || !printerConfig}
+              disabled={!hasSelectedProducts || loading || !isPrinterConfigured}
             >
               {loading ? (
                 <>
@@ -399,11 +353,11 @@ export default function ImpressaoPage() {
 
         <Card>
           <CardHeader>
-          <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between">
               <CardTitle>Produtos</CardTitle>
               {hasSelectedProducts && (
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="sm"
                   onClick={() => setSelectedProducts({})}
                   className="h-7 px-2 flex items-center gap-2 border border-input hover:border-accent rounded-md transition-colors"
