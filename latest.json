@@ -1,11 +1,11 @@
 {
-  "version": "1.0.33",
-  "notes": "Correção da busca de impressoras da pagina de configuração",
-  "pub_date": "2025-03-27T13:45:00.000Z",
+  "version": "1.0.34",
+  "notes": "Correção de bugs na parte de impressões das etiquetas",
+  "pub_date": "2025-04-02T10:08:00.000Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dWh4aWRVbEZCU09TelpqRkxKcm8wSkRhc2NENUJIWGRDSkhqdWoxQmhpVFYzVEU0WlF0UC9ONHdpUFN0VS9pdy9rZ2oraUN0MWpMK01EMXBHbFhtSHdnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQzMDY3ODM0CWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4wLjMzX3g2NC1zZXR1cC5uc2lzLnppcAoyYnhRM01yQjdJQWpDSWY5WVdHUk9DNUhUQ3Q3eG5rMXppcDJtaGZnaXJTNlEveEZGQWczdTV0VUNUendFTjFFYTF4Sm9XOW5FUk9tY1VrUkF6SzNCdz09Cg==",
-      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.33/Sistema.de.Etiquetas_1.0.33_x64-setup.nsis.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dWh6a0owYnhJYzV5K0Zod3Q4SzZ2eUZvVXgrQXVLUVF2c3owUnFtMTlxS21yTEdUaEVCeldYd1l3UFlNa2hVRXgrQzJFL2grQlNrUlNnSGZ5WG1IcndFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQzNTk5MTg0CWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4wLjM0X3g2NC1zZXR1cC5uc2lzLnppcApxWk1KdXg2T2c2V2hPQTVHb3NiMmpndXVvUlBOQndOTjFqUG9hUHJ3cjlnQ3FLWlNIRjVGTmkxOGthVHA1NkV4YXhnZnM4RCtibEFYMFNPZG95UUZDZz09Cg==",
+      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.0.34/Sistema.de.Etiquetas_1.0.34_x64-setup.nsis.zip"
     }
   }
 }
