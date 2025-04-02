@@ -460,9 +460,9 @@ fn delete_product(id: i64, db: State<DbConnection>) -> Result<(), String> {
   }
 }
 
-// Função para impressão de lote usando apenas API do Windows
+// Função para impressão de lote usando formato PPLA para Argox
 #[tauri::command]
-async fn print_label_batch(products: Vec<Option<Product>>, _app_handle: AppHandle, printer_name: Option<String>) -> Result<(), String> {
+async fn print_label_batch(products: Vec<Option<Product>>, app_handle: AppHandle, printer_name: Option<String>) -> Result<(), String> {
   println!("Iniciando impressão de lote com {} produtos...", products.len());
   
   // Obter impressoras do Windows
@@ -486,62 +486,92 @@ async fn print_label_batch(products: Vec<Option<Product>>, _app_handle: AppHandl
   
   println!("Usando impressora Windows: {}", printer_to_use);
   
-  // Criar o conteúdo da etiqueta para a API do Windows
-  let mut label_content = String::new();
-
-          // Posições X para cada etiqueta
-          let x_positions = [50, 314, 578];
-
-  let etiquetas_count = products.iter().filter(|p| p.is_some()).count();
-  println!("Gerando comandos PPLB para {} etiquetas", etiquetas_count);
+  // Obter o estado do banco de dados
+  let db_state = app_handle.state::<DbConnection>();
+  let conn = match db_state.0.lock() {
+    Ok(conn) => conn,
+    Err(e) => return Err(format!("Erro ao acessar banco de dados: {}", e)),
+  };
   
-  // Adiciona comandos para cada etiqueta (formato PPLB em vez de ZPL)
-          for (index, product) in products.iter().enumerate() {
-              if let Some(product) = product {
-      let x = x_positions[index % 3];
-      
-      // Início do formato PPLB
-      label_content.push_str("N\r\n");                                // Limpa buffer (equivalente a ^XA)
-      label_content.push_str("q840\r\n");                             // Largura da etiqueta (equivalente a ^PW)
-      label_content.push_str("Q176,24\r\n");                          // Altura, gap (equivalente a ^LL)
-      label_content.push_str(&format!("D{}\r\n", 8));                 // Densidade (equivalente a ^MD)
-      label_content.push_str(&format!("S{}\r\n", 2));                 // Velocidade (equivalente a ^PR)
-      
-      // Empresa - sintaxe: A x,y,rotação,fonte,multiplier-x,multiplier-y,"texto"
-      label_content.push_str(&format!("A{},24,0,3,1,1,\"ESTRELA METAIS\"\r\n", x));
-      
-                      // Nome curto do produto
-      label_content.push_str(&format!("A{},48,0,3,1,1,\"{}\"\r\n", x, product.name_short));
-      
-                      // Código do produto
-      label_content.push_str(&format!("A{},72,0,3,1,1,\"{}\"\r\n", x, product.product_code));
-      
-      // Código de barras - sintaxe: B x,y,tipo,largura,altura,rotação,"dados"
-      // Tipo 2 = EAN-13, width=2, readable=1 (mostra texto)
-      label_content.push_str(&format!("B{},96,2,2,60,0,1,\"{}\"\r\n", x, product.barcode));
-      
-      // Quantidade (1 etiqueta)
-      label_content.push_str("P1\r\n");
-      
-      // Usar separador para múltiplas etiquetas
-      if index < products.len() - 1 {
-        label_content.push_str("\r\n");
-      }
+  // Criar o conteúdo da etiqueta no formato PPLA
+  let mut label_content = Vec::new();
+  
+  // Sequência de inicialização com parâmetros corretos para a fita de 105mm
+  label_content.extend_from_slice(b"N\r\n");                  // Limpa buffer
+  label_content.extend_from_slice(b"ZN\r\n");                 // Direção normal
+  label_content.extend_from_slice(b"q840\r\n");               // Largura da fita (105mm = 840 dots)
+  label_content.extend_from_slice(b"Q176,25\r\n");            // Altura da etiqueta (22mm = 176 dots) e gap
+  label_content.extend_from_slice(b"O\r\n");                  // Orientação padrão
+  label_content.extend_from_slice(b"JF\r\n");                 // Configuração de impressão
+  label_content.extend_from_slice(b"Z0\r\n");                 // Sem deslocamento vertical
+  
+  // Posições X exatas para cada etiqueta baseadas nas medidas fornecidas
+  // Margem esquerda: 1.5mm = 12 dots
+  // Largura da etiqueta: 33mm = 264 dots
+  // Espaço entre etiquetas: 2mm = 16 dots
+  let x_positions = [
+    12,                     // Primeira etiqueta: margem esquerda
+    12 + 264 + 16,          // Segunda etiqueta: margem + largura + espaço = 292
+    12 + 264 + 16 + 264 + 16 // Terceira etiqueta: 292 + largura + espaço = 572
+  ];
+  
+  // Adicionar cada produto
+  for (index, product) in products.iter().enumerate().filter(|(_, p)| p.is_some()) {
+    let product = product.as_ref().unwrap();
+    let x = x_positions[index % 3];
+    
+    // Centralizar o texto - calculando a posição central de cada etiqueta
+    let center_x = x + 5; // Centro da etiqueta (largura 264 dots / 2)
+    
+    // Adicionar empresa (centralizado) - Y=15 (margem superior)
+    let company_cmd = format!("A{},15,0,3,1,1,N,\"ESTRELA METAIS\"\r\n", center_x);
+    label_content.extend_from_slice(company_cmd.as_bytes());
+    
+    // Adicionar nome do produto (centralizado) - Y=45
+    let name_cmd = format!("A{},45,0,2,1,1,N,\"{}\"\r\n", center_x, product.name_short);
+    label_content.extend_from_slice(name_cmd.as_bytes());
+    
+    // Adicionar código do produto (centralizado) - Y=70
+    let code_cmd = format!("A{},70,0,2,1,1,N,\"{}\"\r\n", center_x, product.product_code);
+    label_content.extend_from_slice(code_cmd.as_bytes());
+    
+    // Adicionar código de barras EAN-13 (centralizado e horizontal) - Y=95
+    // Ajustando a posição X para centralizar o código de barras na etiqueta
+    // Para um código de barras EAN-13, a largura é aproximadamente 95-100 dots
+    // Então, center_x - 50 deve centralizar o código
+    let barcode_cmd = format!("B{},95,0,1,2,6,45,B,\"{}\"\r\n", center_x , product.barcode);
+    label_content.extend_from_slice(barcode_cmd.as_bytes());
+    
+    // Registrar impressão no histórico
+    match conn.execute(
+      "INSERT INTO print_jobs (product_id, product_name, product_code, status) VALUES (?, ?, ?, ?)",
+      params![
+        product.id,
+        &product.name,
+        &product.product_code,
+        "completed"
+      ],
+    ) {
+      Ok(_) => {},
+      Err(e) => println!("Erro ao registrar impressão no histórico: {}", e),
     }
   }
+  
+  // Comando de impressão
+  label_content.extend_from_slice(b"P1\r\n");
   
   println!("Enviando trabalho de impressão para '{}' com {} bytes", printer_to_use, label_content.len());
   
   // Envia para a impressora Windows
-  match windows_printing::print_to_windows_printer(&printer_to_use, "Etiquetas", label_content.as_bytes()) {
+  match windows_printing::print_to_windows_printer(&printer_to_use, "Etiquetas", &label_content) {
     Ok(_) => {
       println!("Impressão enviada com sucesso para '{}'", printer_to_use);
-          Ok(())
-      },
+      Ok(())
+    },
     Err(e) => {
       println!("ERRO ao enviar para impressora: {}", e);
       Err(e)
-      }
+    }
   }
 }
 
@@ -572,7 +602,7 @@ fn get_print_history(db: State<DbConnection>) -> Result<Vec<PrintJob>, String> {
   Ok(result)
 }
 
-// Função para teste de impressão usando apenas API do Windows
+// Função para teste de impressão usando formato PPLA para Argox
 #[tauri::command]
 async fn print_test(printer_name: Option<String>) -> Result<(), String> {
   println!("Iniciando teste de impressão...");
@@ -598,19 +628,32 @@ async fn print_test(printer_name: Option<String>) -> Result<(), String> {
   
   println!("Usando impressora Windows para teste: {}", printer_to_use);
   
-  // Comando de teste para Windows no formato PPLB em vez de ZPL
-  let test_content = "N\r\nq840\r\nQ176,24\r\nD8\r\nS2\r\nA50,50,0,3,1,1,\"Teste de Impressão PPLB\"\r\nP1\r\n";
+  // Comando de teste para Argox no formato PPLA (baseado no dump)
+  let test_content = b"N\r\n\
+    GW620,215,13,32\r\n\
+    ZN\r\n\
+    q822\r\n\
+    O\r\n\
+    JF\r\n\
+    \x1BKIZZQ0\r\n\
+    \x1BKI9+0.0\r\n\
+    ZT\r\n\
+    Q1218,25\r\n\
+    A50,50,0,3,1,1,N,\"TESTE DE IMPRESSAO\"\r\n\
+    A50,100,0,3,1,1,N,\"ARGOX OS-2140\"\r\n\
+    B50,150,1,1,3,7,100,B,\"123456789012\"\r\n\
+    P1\r\n";
   
   // Envia para a impressora Windows
-  match windows_printing::print_to_windows_printer(&printer_to_use, "Teste", test_content.as_bytes()) {
+  match windows_printing::print_to_windows_printer(&printer_to_use, "Teste", test_content) {
     Ok(_) => {
       println!("Teste de impressão enviado com sucesso para '{}'", printer_to_use);
-          Ok(())
-      },
+      Ok(())
+    },
     Err(e) => {
       println!("ERRO ao enviar teste para impressora: {}", e);
       Err(e)
-      }
+    }
   }
 }
 
@@ -756,7 +799,7 @@ async fn connect_printer(config: PrinterConfig, printer_name: Option<String>) ->
   // Verificar se a impressora selecionada existe
   let printer_to_use = match printer_name {
     Some(name) if printers.contains(&name) => name,
-    Some(name) => return Err(format!("Impressora selecionada '{}' não encontrada no sistema", name)),
+    Some(name) => return Err(format!("Impressora selecionada \"{}\" não encontrada no sistema", name)),
     None => printers[0].clone(),
   };
   
@@ -799,10 +842,10 @@ async fn check_update_from_backend(app_handle: AppHandle) -> Result<bool, String
               // Formatar a data para exibição
               let date_str = update.date()
                   .map(|d| format!("{}-{:02}-{:02}", d.year(), d.month() as u8, d.day()))
-                  .unwrap_or_else(|| "Data desconhecida".to_string());
+                  .unwrap_or_else(|| "Data desconhecida ".to_string());
               
               // Emitir evento para o frontend - usando um nome diferente para evitar comportamento automático
-              let _ = app_handle.emit_all("update-manual-check", UpdateInfo {
+              let _ = app_handle.emit_all("update-manual-check ", UpdateInfo {
                   version,
                   body,
                   date: date_str,
@@ -826,7 +869,7 @@ async fn install_update_from_backend(app_handle: AppHandle) -> Result<(), String
   let update = match app_handle.updater().check().await {
       Ok(update) => {
           if !update.is_update_available() {
-              return Err("Não há atualizações disponíveis".to_string());
+              return Err("Não há atualizações disponíveis ".to_string());
           }
           update
       },
@@ -836,18 +879,18 @@ async fn install_update_from_backend(app_handle: AppHandle) -> Result<(), String
   };
 
   // Emitir evento de início do download
-  let _ = app_handle.emit_all("update-pending", ());
+  let _ = app_handle.emit_all("update-pending ", ());
 
   // Iniciar o processo de atualização
   match update.download_and_install().await {
       Ok(_) => {
-          println!("Atualização instalada com sucesso");
-          let _ = app_handle.emit_all("update-installed", ());
+          println!("Atualização instalada com sucesso ");
+          let _ = app_handle.emit_all("update-installed ", ());
           Ok(())
       },
       Err(e) => {
           println!("Erro ao instalar atualização: {}", e);
-          let _ = app_handle.emit_all("update-error", serde_json::json!({
+          let _ = app_handle.emit_all("update-error ", serde_json::json!({
               "error": e.to_string()
           }));
           Err(format!("Erro ao instalar atualização: {}", e))
@@ -867,7 +910,7 @@ async fn check_update_on_startup(app_handle: AppHandle, updater_state: Arc<Updat
       match app_handle.updater().check().await {
           Ok(update) => {
               if update.is_update_available() {
-                  println!("Nova versão disponível na inicialização");
+                  println!("Nova versão disponível na inicialização ");
                   
                   // Extrair informações da atualização
                   let version = update.latest_version().to_string();
@@ -876,11 +919,11 @@ async fn check_update_on_startup(app_handle: AppHandle, updater_state: Arc<Updat
                   // Formatar a data para exibição
                   let date_str = update.date()
                       .map(|d| format!("{}-{:02}-{:02}", d.year(), d.month() as u8, d.day()))
-                      .unwrap_or_else(|| "Data desconhecida".to_string());
+                      .unwrap_or_else(|| "Data desconhecida ".to_string());
                   
                   // Emitir evento para o frontend - usando um nome completamente diferente
                   // para evitar qualquer comportamento automático existente
-                  let _ = app_handle.emit_all("update-startup-notification", UpdateInfo {
+                  let _ = app_handle.emit_all("update-startup-notification ", UpdateInfo {
                       version,
                       body,
                       date: date_str,
@@ -888,7 +931,7 @@ async fn check_update_on_startup(app_handle: AppHandle, updater_state: Arc<Updat
                   
                   // NÃO emitir nenhum outro evento que possa acionar instalação automática
               } else {
-                  println!("Sistema já está na versão mais recente");
+                  println!("Sistema já está na versão mais recente ");
               }
           },
           Err(e) => {
@@ -942,11 +985,80 @@ async fn test_printer_connection(_config: PrinterConfig) -> Result<(), String> {
   println!("Testando impressora Windows: {}", printers[0]);
   
   // Envia um comando simples para testar
-  let test_content = "^XA\r\n^XZ\r\n";
-  match windows_printing::print_to_windows_printer(&printers[0], "Teste de Conexão", test_content.as_bytes()) {
+  let test_content = b"N\r\nGW620,215,13,32\r\nP1\r\n";
+  match windows_printing::print_to_windows_printer(&printers[0], "Teste de Conexão ", test_content) {
     Ok(_) => Ok(()),
     Err(e) => Err(format!("Erro ao testar impressora: {}", e))
   }
+}
+
+// Função para teste com o formato exato capturado
+#[tauri::command]
+fn print_argox_ppla_exact(printer_name: String) -> Result<(), String> {
+  println!("Enviando comando PPLA exato para: {}", printer_name);
+  
+  // Comando PPLA exato capturado do dump
+  let ppla_command = [
+    0x4E, 0x0D, 0x0A, 0x47, 0x57, 0x36, 0x32, 0x30, 0x2C, 0x32, 0x31, 0x35, 0x2C, 0x31, 0x33, 0x2C,
+    0x33, 0x32, 0x2C, 0xF8, 0x1F, 0x98, 0x7F, 0xFE, 0x07, 0xF3, 0xE7, 0xCF, 0xC0, 0xFC, 0x7F, 0xCF
+    // Primeiros 32 bytes do dump - você pode adicionar mais se necessário
+  ];
+  
+  windows_printing::print_to_windows_printer(&printer_name, "Teste PPLA Exato ", &ppla_command)
+}
+
+// Função para teste de formatos de impressora
+#[tauri::command]
+fn test_printer_format(printer_name: String, format_type: String) -> Result<(), String> {
+  println!("Testando formato {} na impressora {}", format_type, printer_name);
+  
+  let test_data: Vec<u8> = match format_type.as_str() {
+    "ppla" => {
+      println!("Usando formato PPLA ");
+      b"N\r\nGW620,215,13,32\r\nA50,50,0,3,1,1,N,\"TESTE PPLA\"\r\nB50,100,1,1,3,7,100,B,\"123456789012\"\r\nP1\r\n".to_vec()
+    },
+    "pplb" => {
+      println!("Usando formato PPLB");
+      b"N\r\nq840\r\nQ176,24\r\nD8\r\nS2\r\nA50,50,0,3,1,1,\"Teste PPLB\"\r\nB50,100,2,2,60,0,1,\"123456789012\"\r\nP1\r\n".to_vec()
+    },
+    "zpl" => {
+      println!("Usando formato ZPL");
+      b"^XA\n^FO50,50^A0N,50,50^FDTeste ZPL^FS\n^FO50,120^BY3^BCN,100,Y,N,N\n^FD123456789012^FS\n^XZ".to_vec()
+    },
+    "text" => {
+      println!("Usando texto simples");
+      "TESTE DE IMPRESSÃO\r\nLinha 1\r\nLinha 2\r\n\r\n\r\n".as_bytes().to_vec()
+    },
+    _ => {
+      return Err(format!("Formato desconhecido: {}", format_type));
+    }
+  };
+  
+  println!("Enviando {} bytes para a impressora", test_data.len());
+  windows_printing::print_to_windows_printer(&printer_name, &format!("Teste {}", format_type), &test_data)
+}
+
+#[tauri::command]
+fn get_product(id: i64, db: State<DbConnection>) -> Result<Product, String> {
+  let conn = db.0.lock().unwrap();
+  
+  conn.query_row(
+      "SELECT id, product_code, name, name_short, barcode, description, created_at, updated_at 
+       FROM products WHERE id = ?",
+      params![id],
+      |row| {
+          Ok(Product {
+              id: Some(row.get(0)?),
+              product_code: row.get(1)?,
+              name: row.get(2)?,
+              name_short: row.get(3)?,
+              barcode: row.get(4)?,
+              description: Some(row.get(5)?),
+              created_at: Some(row.get(6)?),
+              updated_at: Some(row.get(7)?),
+          })
+      },
+  ).map_err(|e| e.to_string())
 }
 
 // Função principal
@@ -971,6 +1083,7 @@ fn main() {
       })
       .invoke_handler(tauri::generate_handler![
           get_products,
+          get_product,
           create_product,
           update_product,
           delete_product,
@@ -988,6 +1101,8 @@ fn main() {
           get_update_settings,
           is_printer_connected,
           test_printer_connection,
+          test_printer_format,
+          print_argox_ppla_exact,
       ])
       .run(tauri::generate_context!())
       .expect("error while running tauri application");

@@ -1,7 +1,6 @@
 use std::ffi::OsStr;
 use std::io::Write;
 use std::os::windows::ffi::OsStrExt;
-use std::os::windows::process::CommandExt;
 use tempfile::NamedTempFile;
 use windows_sys::Win32::Foundation::{ERROR_INSUFFICIENT_BUFFER, HANDLE, GetLastError, BOOL};
 use windows_sys::Win32::Graphics::Printing::{
