@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import React, { useEffect, useState, useCallback, useRef } from "react"
 import { invoke } from "@tauri-apps/api/tauri"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Printer, Search, AlertCircle, Loader2 } from "lucide-react"
+import { Printer, Search, AlertCircle, Loader2, Plus, } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 import { toast } from "sonner"
@@ -37,23 +37,30 @@ interface PrintJob {
 }
 
 interface SelectedProduct extends Product {
-  quantity: number
+  quantity: number | string;
 }
 
 // Função utilitária para cálculos
 function calculateProductStats(selectedProducts: { [key: number]: SelectedProduct }) {
-  const uniqueProductsCount = Object.keys(selectedProducts).length
-  const totalEtiquetas = Object.values(selectedProducts).reduce((total, product) => total + product.quantity, 0)
+  const uniqueProductsCount = Object.keys(selectedProducts).length;
+  const totalEtiquetas = Object.values(selectedProducts).reduce((total, product) => {
+    const quantity = product.quantity === '' ? 0 : Number(product.quantity);
+    return total + quantity;
+  }, 0);
 
   return {
     uniqueProductsCount,
     totalEtiquetas,
-  }
+  };
 }
 
 export default function ImpressaoPage() {
   // Contexto da impressora
   const { selectedPrinter, config } = usePrinter()
+  const [activeProductId, setActiveProductId] = useState<number | null>(null)
+  const [quantityEditMode, setQuantityEditMode] = useState(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const quantityInputRefs = useRef<{[key: number]: HTMLInputElement}>({})
 
   // Estados
   const [products, setProducts] = useState<Product[]>([])
@@ -74,16 +81,17 @@ export default function ImpressaoPage() {
   // Função para preparar os dados do preview
   const previewData = () => {
     const printQueue: (Product | null)[] = []
-
+  
     // Adiciona produtos selecionados à fila
     for (const productId in selectedProducts) {
       const product = selectedProducts[productId]
       // Para cada produto, adicionar exatamente a quantidade solicitada
-      for (let i = 0; i < product.quantity; i++) {
+      const quantity = product.quantity === '' ? 1 : Number(product.quantity);
+      for (let i = 0; i < quantity; i++) {
         printQueue.push(product)
       }
     }
-
+  
     return printQueue
   }
 
@@ -137,13 +145,18 @@ export default function ImpressaoPage() {
     setLoading(true)
     try {
       let totalPrinted = 0
-      const totalToPrint = Object.values(selectedProducts).reduce((acc, product) => acc + product.quantity, 0)
+      const totalToPrint = Object.values(selectedProducts).reduce((acc, product) => {
+        const quantity = product.quantity === '' ? 0 : Number(product.quantity);
+        return acc + quantity;
+      }, 0);
 
       // Cria a fila de impressão com exatamente a quantidade especificada
       const printQueue: (Product | null)[] = []
       for (const productId in selectedProducts) {
         const product = selectedProducts[productId]
-        for (let i = 0; i < product.quantity; i++) {
+        const quantity = product.quantity === '' ? 1 : Number(product.quantity);
+
+        for (let i = 0; i < quantity; i++) {
           printQueue.push(product)
         }
       }
@@ -200,20 +213,128 @@ export default function ImpressaoPage() {
     })
   }
 
-  const updateQuantity = (productId: number, quantity: number) => {
+  const updateQuantity = (productId: number, value: number | string) => {
+    // Permite valores vazios temporariamente durante a edição
+    const newValue = value === '' ? '' : Number(value);
+    
     setSelectedProducts((prev) => ({
       ...prev,
-      [productId]: { ...prev[productId], quantity: Math.max(1, quantity) },
-    }))
+      [productId]: { ...prev[productId], quantity: newValue },
+    }));
+  };
+  // Adicione esta função ao seu componente (antes do return)
+  // Adicione esta função antes do return
+const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (e.key === 'Enter') {
+    // Procura um produto que corresponda exatamente ao código digitado
+    const exactMatch = products.find(
+      product => product.product_code.toLowerCase() === searchTerm.toLowerCase()
+    );
+    
+    // Se encontrar uma correspondência exata
+    if (exactMatch) {
+      const productId = exactMatch.id!;
+      
+      // Seleciona o produto se ainda não estiver selecionado
+      if (!selectedProducts[productId]) {
+        toggleProductSelection(exactMatch);
+        updateQuantity(productId, 1);
+      }
+      
+      // Define o produto ativo e limpa o campo de busca
+      setActiveProductId(productId);
+      setSearchTerm('');
+      
+      // Ativa o modo de edição de quantidade
+      setQuantityEditMode(true);
+      
+      // Foca no campo de quantidade após um pequeno delay
+      setTimeout(() => {
+        if (quantityInputRefs.current[productId]) {
+          quantityInputRefs.current[productId].focus();
+          quantityInputRefs.current[productId].select();
+        }
+      }, 50);
+    } else {
+      // Se não encontrar correspondência exata, procura por correspondência parcial
+      const partialMatch = products.find(
+        product => product.product_code.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      
+      if (partialMatch) {
+        const productId = partialMatch.id!;
+        
+        if (!selectedProducts[productId]) {
+          toggleProductSelection(partialMatch);
+          updateQuantity(productId, 1);
+        }
+        
+        setActiveProductId(productId);
+        setSearchTerm('');
+        setQuantityEditMode(true);
+        
+        setTimeout(() => {
+          if (quantityInputRefs.current[productId]) {
+            quantityInputRefs.current[productId].focus();
+            quantityInputRefs.current[productId].select();
+          }
+        }, 50);
+      } else {
+        // Se não encontrar nenhuma correspondência
+        toast.error("Produto não encontrado", {
+          description: `Nenhum produto com o código "${searchTerm}" foi encontrado.`,
+        });
+      }
+    }
   }
+};
+  
+  // Adicione esta função para lidar com o Enter no campo de quantidade
+  const handleQuantityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, productId: number) => {
+    if (e.key === 'Enter') {
+      // Garante que o valor final seja pelo menos 1
+      const currentValue = selectedProducts[productId].quantity;
+      if (currentValue === '' || Number(currentValue) < 1) {
+        updateQuantity(productId, 1);
+      }
+      
+      // Desativa o modo de edição de quantidade
+      setQuantityEditMode(false);
+      setActiveProductId(null);
+      
+      // Retorna o foco para o campo de busca
+      if (searchInputRef.current) {
+        searchInputRef.current.focus();
+      }
+    }
+  };
+
 
   // Filtragem de produtos
-  const filteredProducts = products.filter(
-    (product) =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.barcode.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  // Primeiro filtra os produtos com base no termo de busca
+const filteredProducts = products.filter(
+  (product) => {
+    // Se estiver em modo de edição de quantidade, mostrar apenas o produto ativo
+    if (quantityEditMode && activeProductId !== null) {
+      return product.id === activeProductId;
+    }
+    
+    // Caso contrário, aplicar o filtro normal por código do produto
+    return product.product_code.toLowerCase().includes(searchTerm.toLowerCase());
+  }
+);
+
+// Depois ordena os produtos filtrados, colocando os selecionados no topo
+const sortedFilteredProducts = [...filteredProducts].sort((a, b) => {
+  const isASelected = !!selectedProducts[a.id!];
+  const isBSelected = !!selectedProducts[b.id!];
+  
+  if (isASelected && !isBSelected) return -1; // A está selecionado, B não -> A vem primeiro
+  if (!isASelected && isBSelected) return 1;  // B está selecionado, A não -> B vem primeiro
+  return 0; // Mantém a ordem original se ambos estão selecionados ou ambos não estão
+});
+
+  const lastSelectedIndex = sortedFilteredProducts.findIndex(product => !selectedProducts[product.id!]) - 1;
 
   const printSelectedProducts = async () => {
     if (!selectedPrinter) {
@@ -344,10 +465,13 @@ export default function ImpressaoPage() {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por nome, código do produto ou código de barras..."
-            className="pl-8"
+            ref={searchInputRef}
+            placeholder="Buscar por código do produto..."
+            className="pl-8 focus:ring-2 focus:ring-amber-400  focus-visible:ring-amber-400 focus-visible:ring-2"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={handleSearchKeyDown} // Adicione o evento de tecla aqui
+            autoFocus
           />
         </div>
 
@@ -381,50 +505,72 @@ export default function ImpressaoPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredProducts.length === 0 ? (
+                {sortedFilteredProducts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground">
                       Nenhum produto encontrado
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredProducts.map((product) => (
-                    <TableRow key={product.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={!!selectedProducts[product.id!]}
-                          onCheckedChange={() => toggleProductSelection(product)}
-                        />
-                      </TableCell>
-                      <TableCell>{product.product_code}</TableCell>
-                      <TableCell>{product.barcode}</TableCell>
-                      <TableCell>{product.name}</TableCell>
-                      <TableCell>
-                        {selectedProducts[product.id!] && (
-                          <Input
-                            type="number"
-                            min="1"
-                            value={selectedProducts[product.id!].quantity}
-                            onChange={(e) => updateQuantity(product.id!, Number.parseInt(e.target.value) || 1)}
-                            className="w-20"
+                  sortedFilteredProducts.map((product, index) => (
+                    <React.Fragment key={product.id}>
+                      <TableRow 
+                        className={`
+                          ${selectedProducts[product.id!] ? "bg-primary/10 hover:bg-primary/15" : ""}
+                          table-row-enter table-row-enter-active table-row-move
+                        `}
+                        
+                      >
+                        <TableCell>
+                          <Checkbox
+                            checked={!!selectedProducts[product.id!]}
+                            onCheckedChange={() => toggleProductSelection(product)}
                           />
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            toggleProductSelection(product)
-                            if (!selectedProducts[product.id!]) {
-                              updateQuantity(product.id!, 1)
-                            }
-                          }}
-                        >
-                          <Printer className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
+                        </TableCell>
+                        <TableCell>{product.product_code}</TableCell>
+                        <TableCell>{product.barcode}</TableCell>
+                        <TableCell>{product.name}</TableCell>
+                        <TableCell>
+                          {selectedProducts[product.id!] && (
+                            <Input
+                            type="number"
+                            min="0"
+                            value={selectedProducts[product.id!].quantity}
+                            onChange={(e) => updateQuantity(product.id!, e.target.value)}
+                            className={`w-20 ${activeProductId === product.id ? 'ring-2 ring-primary' : ''} focus:ring-2 focus:ring-amber-400  focus-visible:ring-amber-400`}
+                            ref={(el) => {
+                              if (el) quantityInputRefs.current[product.id!] = el;
+                            }}
+                            onKeyDown={(e) => handleQuantityKeyDown(e, product.id!)}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              toggleProductSelection(product)
+                              if (!selectedProducts[product.id!]) {
+                                updateQuantity(product.id!, 1)
+                              }
+                            }}
+                          >
+                            <Plus className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                      
+                      {/* Adiciona a linha divisória após o último produto selecionado */}
+                      {index === lastSelectedIndex && lastSelectedIndex >= 0 && (
+                        <TableRow>
+                          <TableCell 
+                            colSpan={6} 
+                            className="p-0 h-[4px] bg-primary/50"
+                          />
+                        </TableRow>
+                      )}
+                    </React.Fragment>
                   ))
                 )}
               </TableBody>
@@ -432,45 +578,7 @@ export default function ImpressaoPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Histórico de Impressão</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Nome</TableHead>
-                  <TableHead className="text-right">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {printHistory.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="text-center text-muted-foreground">
-                      Nenhum histórico de impressão
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  printHistory.map((job) => (
-                    <TableRow key={job.id}>
-                      <TableCell>{new Date(job.created_at).toLocaleString()}</TableCell>
-                      <TableCell>{job.product_code}</TableCell>
-                      <TableCell>{job.product_name}</TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant={job.status === "completed" ? "default" : "secondary"}>
-                          {job.status === "completed" ? "Concluído" : job.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+        
       </div>
     </div>
   )

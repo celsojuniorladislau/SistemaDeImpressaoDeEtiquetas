@@ -110,3 +110,16 @@ html[data-theme="dark"] .dashboard-card {
     @apply bg-background text-foreground;
   }
 }
+
+.table-row-enter {
+  opacity: 0;
+  transform: translateY(10px);
+}
+.table-row-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 300ms, transform 300ms;
+}
+.table-row-move {
+  transition: transform 0.3s ease;
+}

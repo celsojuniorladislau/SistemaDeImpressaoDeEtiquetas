@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Search } from "lucide-react"
 import { invoke } from "@tauri-apps/api/tauri"
 import { toast } from "@/components/ui/use-toast"
+import { Badge } from "@/components/ui/badge"
 
 interface PrintJob {
   id: number
@@ -91,7 +92,11 @@ export default function HistoricoPage() {
                     <TableCell>{new Date(job.created_at).toLocaleString()}</TableCell>
                     <TableCell>{job.product_name}</TableCell>
                     <TableCell>{job.product_code}</TableCell>
-                    <TableCell className="text-right">{job.status}</TableCell>
+                    <TableCell className="text-right">
+                      <Badge variant={job.status === "completed" ? "default" : "secondary"}>
+                       {job.status === "completed" ? "Concluído" : job.status}
+                      </Badge>
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (

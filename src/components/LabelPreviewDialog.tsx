@@ -7,11 +7,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
-import { Eye, ZoomIn, ZoomOut } from "lucide-react"
+import { Eye, ZoomIn, ZoomOut, Printer, Loader2 } from "lucide-react"
+import { invoke } from "@tauri-apps/api/tauri"
+import { toast } from "sonner"
+import { usePrinter } from "@/contexts/printer-context"
 
 interface Product {
   id?: number
@@ -25,6 +29,7 @@ interface Product {
 interface LabelPreviewDialogProps {
   products: (Product | null)[]
   disabled?: boolean
+  onPrintSuccess?: () => void
 }
 
 // Função para calcular dígito verificador EAN-13
@@ -82,9 +87,13 @@ function getEAN13Encoding(code: string): string {
   return pattern
 }
 
-export function LabelPreviewDialog({ products, disabled = false }: LabelPreviewDialogProps) {
+export function LabelPreviewDialog({ products, disabled = false, onPrintSuccess }: LabelPreviewDialogProps) {
   const [open, setOpen] = useState(false)
   const [previewScale, setPreviewScale] = useState(1)
+  const [printing, setPrinting] = useState(false)
+
+  // Obter o contexto da impressora
+  const { selectedPrinter } = usePrinter()
 
   // Cálculo correto de produtos únicos e total de etiquetas
   const validProducts = products.filter((p): p is Product => p !== null)
@@ -136,6 +145,70 @@ export function LabelPreviewDialog({ products, disabled = false }: LabelPreviewD
         </text>
       </svg>
     )
+  }
+
+  // Função para imprimir as etiquetas
+  const handlePrint = async () => {
+    if (!selectedPrinter) {
+      toast.error("Erro", {
+        description: "Configure a impressora antes de imprimir.",
+      })
+      return
+    }
+
+    setPrinting(true)
+    try {
+      let totalPrinted = 0
+      const totalToPrint = validProducts.length
+
+      // Imprime em grupos de 3 (isso é limitação física da impressora)
+      for (let i = 0; i < validProducts.length; i += 3) {
+        // Cria um batch com os produtos atuais (até 3)
+        const currentBatch = validProducts.slice(i, i + 3)
+
+        // Cria um novo array com tipagem explícita que permite null
+        const batch: (Product | null)[] = [...currentBatch]
+
+        // Se o batch tiver menos que 3 etiquetas, completa com null
+        while (batch.length < 3) {
+          batch.push(null)
+        }
+
+        await invoke("print_label_batch", {
+          products: batch,
+          printerName: selectedPrinter,
+        })
+
+        totalPrinted += batch.filter((p) => p !== null).length
+
+        // Atualiza o progresso
+        toast.info("Imprimindo...", {
+          description: `Etiqueta ${totalPrinted} de ${totalToPrint}`,
+        })
+
+        // Espera 1 segundo entre impressões
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+
+      toast.success("Sucesso", {
+        description: `${totalPrinted} etiqueta(s) impressa(s) com sucesso!`,
+      })
+
+      // Fechar o diálogo após impressão bem-sucedida
+      setOpen(false)
+
+      // Chamar o callback de sucesso se fornecido
+      if (onPrintSuccess) {
+        onPrintSuccess()
+      }
+    } catch (error) {
+      console.error("Erro ao imprimir:", error)
+      toast.error("Erro de Impressão", {
+        description: "Verifique se a impressora está conectada e configurada corretamente.",
+      })
+    } finally {
+      setPrinting(false)
+    }
   }
 
   return (
@@ -198,7 +271,7 @@ export function LabelPreviewDialog({ products, disabled = false }: LabelPreviewD
                       className={cn(
                         "shadow-lg rounded-lg flex flex-col items-center justify-between transition-all duration-200",
                         "relative overflow-hidden",
-                        "bg-white text-black"
+                        "bg-white text-black",
                       )}
                       style={{
                         width: mmToPx(33),
@@ -243,8 +316,36 @@ export function LabelPreviewDialog({ products, disabled = false }: LabelPreviewD
           </p>
           <p>Dimensões de cada etiqueta: 33mm x 22mm</p>
         </div>
+
+        <DialogFooter className="mt-6">
+          <div className="flex w-full justify-between items-center">
+            <div className="text-sm text-muted-foreground">
+              {/* {selectedPrinter ? (
+                <span>Impressora: {selectedPrinter}</span>
+              ) : (
+                <span className="text-amber-500">Nenhuma impressora configurada</span>
+              )} */}
+            </div>
+            <Button
+              onClick={handlePrint}
+              disabled={printing || !selectedPrinter || validProducts.length === 0}
+              className="min-w-[150px]"
+            >
+              {printing ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Imprimindo...
+                </>
+              ) : (
+                <>
+                  <Printer className="h-4 w-4 mr-2" />
+                  Imprimir Etiquetas
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
 }
-
