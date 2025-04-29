@@ -77,10 +77,7 @@ export default function ProductsPage() {
 
   const filteredProducts = products.filter(
     (product) =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.barcode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.name_short.toLowerCase().includes(searchTerm.toLowerCase()),
+      product.product_code.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   if (loading) {
@@ -111,7 +108,7 @@ export default function ProductsPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Buscar por código, código de barras ou nome..."
+            placeholder="Buscar por código do produto"
             className="pl-8"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "Sistema.de.Etiquetas",
-    "version": "1.1.0"
+    "version": "1.1.1"
   },
   "tauri": {
     "allowlist": {
@@ -61,20 +61,6 @@
     "security": {
       "csp": null
     },
-    "windows": [
-      {
-        "fullscreen": false,
-        "height": 600,
-        "resizable": true,
-        "title": "Sistema de Etiquetas - Estrela Metais",
-        "width": 971,
-        "visible": true,
-        "decorations": true,
-        "center": true,
-        "focus": true,
-        "skipTaskbar": false,
-        "alwaysOnTop": false
-      }
-    ]
+    "windows": []
   }
 }

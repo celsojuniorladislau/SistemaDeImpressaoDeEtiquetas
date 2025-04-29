@@ -1,11 +1,11 @@
 {
-  "version": "1.1.0",
-  "notes": "- Nova tela inicial; Nova área especial para o Dashboard; Melhorias na interface do usuário; Melhor gerenciamento de lotes de impressão; Otimizações de performance",
-  "pub_date": "2024-04-21T00:00:00Z",
+  "version": "1.1.1",
+  "notes": "Correção de pesistencia de escolha de impressora e modo em tela maximizada de modo padrão ao iniciar o sistema.",
+  "pub_date": "2024-04-28T10:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dW8wY2xTOUZWeS9FLzVZcTY2c0FhbEtxclU0bTdRQ1JyYmtFdTUxaE9qN3NBOGYwVXcwdEQyNWFxR2VyZWlMbzBUcDlJdU53aG9ueGZQN2ZkVFkrMlFJPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQ1Mjc5NzA0CWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4xLjBfeDY0LXNldHVwLm5zaXMuemlwCmphcDNkV04va2NQK0RQaDR5d2dzQWt6MXN5aWhsOXZrTW5oVEhHalFSMFdaZjVaN2Nlb1d2Si9NZ3JvWS9mS24rQnlESWRoNzdHczhwem9FekJlakR3PT0K",
-      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.1.0/Sistema.de.Etiquetas_1.1.0_x64-setup.nsis.zip"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dXFSdWJSUzloOENyTld6OHFRUWt1ZDFtNFhzd1paZXRUT1cvM2ZmNThNdmp6SS94ckRIRGVTQjJvYWxob2xiM3dZUHRENlhBdWRPQ1dpYTd2SFg0TXc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQ1OTUxOTQyCWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4xLjFfeDY0LXNldHVwLm5zaXMuemlwCmRZd1UvNGZxVkFjUWxsQk9jaHgzRnI0QVBEUXZyUmhmRmtMTVg0WHpwZjFTUmJXakJDQkNBTEVXQnRaN1FUaEtlOGc2MXZqQS81aTlOU2hXNG5SWkRRPT0K",
+      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.1.1/Sistema.de.Etiquetas_1.1.1_x64-setup.nsis.zip"
     }
   }
 }

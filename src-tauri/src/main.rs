@@ -5,7 +5,7 @@ use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{Manager, AppHandle, State};
+use tauri::{Manager, AppHandle, State, WindowBuilder, WindowUrl};
 
 // Importar o módulo windows_printing
 mod windows_printing;
@@ -520,8 +520,8 @@ async fn print_label_batch(products: Vec<Option<Product>>, app_handle: AppHandle
     let product = product.as_ref().unwrap();
     let x = x_positions[index % 3];
     
-    // Centralizar o texto - calculando a posição central de cada etiqueta
-    let center_x = x + 5; // Centro da etiqueta (largura 264 dots / 2)
+    // Calcular corretamente o centro da etiqueta
+    let center_x = x ; // Centro da etiqueta (largura 264 dots / 2 = 132)
     
     // Adicionar empresa (centralizado) - Y=15 (margem superior)
     let company_cmd = format!("A{},15,0,3,1,1,N,\"ESTRELA METAIS\"\r\n", center_x);
@@ -532,14 +532,15 @@ async fn print_label_batch(products: Vec<Option<Product>>, app_handle: AppHandle
     label_content.extend_from_slice(name_cmd.as_bytes());
     
     // Adicionar código do produto (centralizado) - Y=70
-    let code_cmd = format!("A{},70,0,2,1,1,N,\"{}\"\r\n", center_x, product.product_code);
+    let code_cmd = format!("A{},70,0,2,1,1,N,\"{}\"\r\n", center_x + (264 / 2) - 16, product.product_code);
     label_content.extend_from_slice(code_cmd.as_bytes());
     
     // Adicionar código de barras EAN-13 (centralizado e horizontal) - Y=95
-    // Ajustando a posição X para centralizar o código de barras na etiqueta
-    // Para um código de barras EAN-13, a largura é aproximadamente 95-100 dots
-    // Então, center_x - 50 deve centralizar o código
-    let barcode_cmd = format!("B{},95,0,1,2,6,45,B,\"{}\"\r\n", center_x , product.barcode);
+    // Para códigos de barras em PPLA, o alinhamento é diferente
+    // O comando B já posiciona o código de barras a partir do ponto X
+    // Para centralizar, precisamos calcular o deslocamento
+    
+    let barcode_cmd = format!("B{},95,0,1,2,6,45,B,\"{}\"\r\n", center_x, product.barcode);
     label_content.extend_from_slice(barcode_cmd.as_bytes());
     
     // Registrar impressão no histórico
@@ -1063,7 +1064,6 @@ fn get_product(id: i64, db: State<DbConnection>) -> Result<Product, String> {
 
 // Função principal
 fn main() {
-  // Atualizar a inicialização da estrutura UpdaterState no main()
   let updater_state = Arc::new(UpdaterState {
       checking: AtomicBool::new(false),
   });
@@ -1071,16 +1071,6 @@ fn main() {
   tauri::Builder::default()
       .manage(setup_database())
       .manage(updater_state.clone())
-      .setup(move |app| {
-          // Verificar atualizações na inicialização
-          let app_handle = app.handle().clone();
-          let state = updater_state.clone();
-          tauri::async_runtime::spawn(async move {
-              check_update_on_startup(app_handle, state).await;
-          });
-          
-          Ok(())
-      })
       .invoke_handler(tauri::generate_handler![
           get_products,
           get_product,
@@ -1104,6 +1094,24 @@ fn main() {
           test_printer_format,
           print_argox_ppla_exact,
       ])
+      .setup(move |app| {
+          WindowBuilder::new(
+              app,
+              "main",
+              WindowUrl::App("index.html".into()),
+          )
+          .title("Sistema de Impressão de Etiquetas")
+          .maximized(true)
+          .build()?;
+
+          let app_handle = app.handle().clone();
+          let state = updater_state.clone();
+          tauri::async_runtime::spawn(async move {
+              check_update_on_startup(app_handle, state).await;
+          });
+
+          Ok(())
+      })
       .run(tauri::generate_context!())
       .expect("error while running tauri application");
 }

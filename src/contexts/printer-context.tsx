@@ -4,13 +4,14 @@ import { createContext, useContext, useState, useEffect, type ReactNode } from "
 import { invoke } from "@tauri-apps/api/tauri"
 import { toast } from "sonner"
 
+// Atualizar a interface PrinterConfig para corresponder exatamente ao que o backend retorna
 interface PrinterConfig {
   darkness: number
   width: number
   height: number
   speed: number
   port: string
-  selectedPrinter?: string
+  selected_printer?: string | null // Alterado para corresponder ao tipo retornado pelo backend
 }
 
 interface PrinterContextType {
@@ -19,7 +20,7 @@ interface PrinterContextType {
   config: PrinterConfig
   loading: boolean
   searchPrinters: (showToasts?: boolean, silent?: boolean) => Promise<void>
-  setSelectedPrinter: (printer: string) => void
+  setSelectedPrinter: (printer: string) => Promise<boolean> // Retorna boolean indicando sucesso
   saveConfig: () => Promise<void>
   testPrint: () => Promise<void>
   updateConfig: (newConfig: Partial<PrinterConfig>) => void
@@ -28,9 +29,30 @@ interface PrinterContextType {
 
 const PrinterContext = createContext<PrinterContextType | undefined>(undefined)
 
+// Função utilitária para salvar no localStorage com tratamento de erros
+const saveToLocalStorage = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value)
+    return true
+  } catch (error) {
+    console.error(`Erro ao salvar ${key} no localStorage:`, error)
+    return false
+  }
+}
+
+// Função utilitária para ler do localStorage com tratamento de erros
+const getFromLocalStorage = (key: string) => {
+  try {
+    return localStorage.getItem(key)
+  } catch (error) {
+    console.error(`Erro ao ler ${key} do localStorage:`, error)
+    return null
+  }
+}
+
 export function PrinterProvider({ children }: { children: ReactNode }) {
   const [printers, setPrinters] = useState<string[]>([])
-  const [selectedPrinter, setSelectedPrinter] = useState<string>("")
+  const [selectedPrinter, setSelectedPrinterState] = useState<string>("")
   const [config, setConfig] = useState<PrinterConfig>({
     darkness: 8,
     width: 840,
@@ -41,50 +63,85 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false)
   const [initialized, setInitialized] = useState(false)
 
-  // Função para processar impressoras e atualizar estados
-  const processPrinters = (found: string[]) => {
+  // Atualizar a função processPrinters para lidar com o valor null/undefined
+  const processPrinters = (found: string[], savedPrinter?: string | null) => {
     setPrinters(found)
 
-    // Se houver impressoras e nenhuma estiver selecionada, selecione a primeira
-    if (!selectedPrinter && found.length > 0) {
-      setSelectedPrinter(found[0])
+    // Se temos uma impressora salva e ela existe na lista, use-a
+    if (savedPrinter && found.includes(savedPrinter)) {
+      console.log("Usando impressora salva:", savedPrinter)
+      setSelectedPrinterState(savedPrinter)
+    }
+    // Se não temos uma impressora salva ou ela não existe mais, mas temos impressoras disponíveis
+    else if (!selectedPrinter && found.length > 0) {
+      console.log("Selecionando primeira impressora disponível:", found[0])
+      setSelectedPrinterState(found[0])
     }
 
     // Salvar no localStorage para evitar consultas desnecessárias
+    saveToLocalStorage("cachedPrinters", JSON.stringify(found))
+    saveToLocalStorage("printersCacheTime", Date.now().toString())
+  }
+
+  // Função modificada para ser assíncrona e garantir que a impressora seja salva
+  const setSelectedPrinter = async (printer: string) => {
+    console.log("Definindo impressora selecionada:", printer)
+
+    // Atualiza o estado local
+    setSelectedPrinterState(printer)
+
+    // Salva no localStorage imediatamente
+    saveToLocalStorage("selectedPrinter", printer)
+
     try {
-      localStorage.setItem("cachedPrinters", JSON.stringify(found))
-      localStorage.setItem("printersCacheTime", Date.now().toString())
+      // Salva no banco de dados SQLite
+      const fullConfig = {
+        ...config,
+        port: "Windows",
+        selected_printer: printer, // Usando o nome correto da coluna
+      }
+
+      console.log("Salvando configuração com impressora:", fullConfig)
+      await invoke("save_printer_settings", { config: fullConfig })
+
+      // Tenta conectar à impressora
+      await invoke("connect_printer", { config: fullConfig, printerName: printer })
+
+      console.log("Impressora salva e conectada com sucesso:", printer)
+      return true
     } catch (error) {
-      console.error("Erro ao salvar cache de impressoras:", error)
+      console.error("Erro ao salvar impressora nas configurações:", error)
+      // Mesmo com erro, mantemos o estado local e localStorage atualizados
+      return false
     }
   }
 
   const searchPrinters = async (showToasts = true, silent = false) => {
     // Primeiro tenta mostrar as impressoras em cache enquanto carrega
-    try {
-      const cachedPrinters = localStorage.getItem("cachedPrinters")
-      const cacheTime = localStorage.getItem("printersCacheTime")
+    const cachedPrinters = getFromLocalStorage("cachedPrinters")
+    const cacheTime = getFromLocalStorage("printersCacheTime")
 
-      // Se tiver um cache recente (menos de 5 minutos), use-o inicialmente
-      const cacheAgeMs = cacheTime ? Date.now() - Number.parseInt(cacheTime) : Number.POSITIVE_INFINITY
-      if (cachedPrinters && cacheAgeMs < 5 * 60 * 1000) {
+    // Se tiver um cache recente (menos de 5 minutos), use-o inicialmente
+    const cacheAgeMs = cacheTime ? Date.now() - Number.parseInt(cacheTime) : Number.POSITIVE_INFINITY
+    if (cachedPrinters && cacheAgeMs < 5 * 60 * 1000) {
+      try {
         const cached = JSON.parse(cachedPrinters)
         if (Array.isArray(cached) && cached.length > 0) {
-          processPrinters(cached)
+          processPrinters(cached, config.selected_printer || getFromLocalStorage("selectedPrinter"))
           // Se o cache for muito recente (menos de 30 segundos), nem faz nova busca
           if (cacheAgeMs < 30 * 1000 && !showToasts) {
             return
           }
         }
+      } catch (error) {
+        console.error("Erro ao processar cache de impressoras:", error)
       }
-    } catch (error) {
-      console.error("Erro ao acessar cache:", error)
     }
 
     try {
       // Adicionar parâmetro para solicitar operação silenciosa que não cause flash de tela
       const found = await invoke<string[]>("list_printers", { silent: true })
-      processPrinters(found)
+      processPrinters(found, config.selected_printer || getFromLocalStorage("selectedPrinter"))
 
       if (found.length === 0) {
         if (showToasts) {
@@ -107,18 +164,66 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Atualizar a função loadSavedConfig para lidar corretamente com o valor null/undefined
   const loadSavedConfig = async () => {
     try {
+      console.log("Carregando configurações salvas...")
       const savedConfig = await invoke<PrinterConfig | null>("get_printer_settings")
+
       if (savedConfig) {
+        console.log("Configurações carregadas:", savedConfig)
         setConfig(savedConfig)
+
         // Se houver uma impressora salva nas configurações, selecione-a
-        if (savedConfig.selectedPrinter) {
-          setSelectedPrinter(savedConfig.selectedPrinter)
+        if (savedConfig.selected_printer) {
+          console.log("Impressora salva encontrada nas configurações:", savedConfig.selected_printer)
+          setSelectedPrinterState(savedConfig.selected_printer)
+          saveToLocalStorage("selectedPrinter", savedConfig.selected_printer)
+        } else {
+          console.log("Nenhuma impressora salva nas configurações")
+
+          // Tentar recuperar do localStorage
+          const localPrinter = getFromLocalStorage("selectedPrinter")
+          if (localPrinter) {
+            console.log("Impressora encontrada no localStorage:", localPrinter)
+            setSelectedPrinterState(localPrinter)
+
+            // Atualiza as configurações com a impressora do localStorage
+            const updatedConfig = { ...savedConfig, selected_printer: localPrinter }
+            setConfig(updatedConfig)
+
+            // Salva de volta nas configurações
+            await invoke("save_printer_settings", { config: updatedConfig })
+            console.log("Configurações atualizadas com impressora do localStorage")
+          }
+        }
+      } else {
+        console.log("Nenhuma configuração salva encontrada")
+
+        // Tentar recuperar do localStorage
+        const localPrinter = getFromLocalStorage("selectedPrinter")
+        if (localPrinter) {
+          console.log("Impressora encontrada no localStorage:", localPrinter)
+          setSelectedPrinterState(localPrinter)
+
+          // Cria uma nova configuração com a impressora do localStorage
+          const newConfig = { ...config, selected_printer: localPrinter }
+          setConfig(newConfig)
+
+          // Salva nas configurações
+          await invoke("save_printer_settings", { config: newConfig })
+          console.log("Novas configurações criadas com impressora do localStorage")
         }
       }
     } catch (error) {
       console.error("Erro ao carregar configurações:", error)
+
+      // Tentar recuperar do localStorage como fallback
+      const localPrinter = getFromLocalStorage("selectedPrinter")
+      if (localPrinter) {
+        console.log("Usando impressora do localStorage após erro:", localPrinter)
+        setSelectedPrinterState(localPrinter)
+      }
     }
   }
 
@@ -136,16 +241,21 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
       const fullConfig = {
         ...config,
         port: "Windows",
-        selectedPrinter: selectedPrinter,
+        selected_printer: selectedPrinter, // Usando o nome correto da coluna
       }
 
+      console.log("Salvando configurações completas:", fullConfig)
       await invoke("save_printer_settings", { config: fullConfig })
       await invoke("connect_printer", { config: fullConfig, printerName: selectedPrinter })
+
+      // Salvar também no localStorage para redundância
+      saveToLocalStorage("selectedPrinter", selectedPrinter)
 
       toast.success("Configurações salvas!", {
         description: "Parâmetros de impressão atualizados.",
       })
     } catch (error) {
+      console.error("Erro ao salvar configurações:", error)
       toast.error("Erro ao salvar configurações", {
         description: String(error),
       })
@@ -188,14 +298,17 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  // Efeito para inicialização
+  // Efeito para inicialização - Modificado para garantir a ordem correta
   useEffect(() => {
     if (!initialized) {
       const initialize = async () => {
         setLoading(true)
         try {
-          // Carregar configuração e impressoras em paralelo
-          await Promise.all([loadSavedConfig(), searchPrinters(false, true)])
+          // Primeiro carregamos as configurações para obter a impressora salva
+          await loadSavedConfig()
+
+          // Depois buscamos as impressoras disponíveis
+          await searchPrinters(false, true)
         } catch (error) {
           console.error("Erro na inicialização:", error)
         } finally {
@@ -208,29 +321,8 @@ export function PrinterProvider({ children }: { children: ReactNode }) {
     }
   }, [initialized])
 
-  // Efeito para salvar automaticamente quando a impressora é alterada
-  useEffect(() => {
-    if (initialized && selectedPrinter) {
-      const saveSelectedPrinter = async () => {
-        try {
-          const fullConfig = {
-            ...config,
-            port: "Windows",
-            selectedPrinter: selectedPrinter,
-          }
-
-          await invoke("save_printer_settings", { config: fullConfig })
-          await invoke("connect_printer", { config: fullConfig, printerName: selectedPrinter })
-
-          // Não mostrar toast aqui para evitar muitas notificações durante a navegação
-        } catch (error) {
-          console.error("Erro ao salvar impressora selecionada:", error)
-        }
-      }
-
-      saveSelectedPrinter()
-    }
-  }, [selectedPrinter, initialized])
+  // Removemos o efeito automático para evitar salvamentos desnecessários
+  // Agora o salvamento é explicitamente controlado pela função setSelectedPrinter
 
   return (
     <PrinterContext.Provider
@@ -259,4 +351,3 @@ export function usePrinter() {
   }
   return context
 }
-

@@ -14,7 +14,7 @@ interface PrinterStatus {
 }
 
 export function PrinterStatus() {
-  const { selectedPrinter } = usePrinter()
+  const { selectedPrinter, isPrinterConnected } = usePrinter()
   const [status, setStatus] = useState<PrinterStatus>({
     isConnected: false,
     port: "",
@@ -24,10 +24,17 @@ export function PrinterStatus() {
   const checkPrinterConnection = async () => {
     try {
       // Verificar se existe impressora conectada
-      const isConnected = await invoke<boolean>("is_printer_connected")
+      const isConnected = await isPrinterConnected()
 
-      const settings = await invoke<{ port: string } | null>("get_printer_settings")
+      const settings = await invoke<{ port: string; selectedPrinter?: string } | null>("get_printer_settings")
       const port = settings?.port || "Não configurada"
+
+      console.log("Status da impressora:", {
+        isConnected,
+        port,
+        selectedPrinter: settings?.selectedPrinter || "Nenhuma",
+        currentSelectedPrinter: selectedPrinter,
+      })
 
       setStatus({
         isConnected,
@@ -54,6 +61,7 @@ export function PrinterStatus() {
   // Verifica novamente quando a impressora selecionada mudar
   useEffect(() => {
     if (selectedPrinter) {
+      console.log("Impressora selecionada alterada no componente PrinterStatus:", selectedPrinter)
       checkPrinterConnection()
     }
   }, [selectedPrinter])
@@ -104,4 +112,3 @@ export function PrinterStatus() {
     </Card>
   )
 }
-

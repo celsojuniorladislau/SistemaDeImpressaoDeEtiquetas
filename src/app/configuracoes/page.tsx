@@ -2,15 +2,16 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Printer, RefreshCcw, Settings, AlertCircle } from "lucide-react"
+import { Printer, RefreshCcw, Settings, AlertCircle, Save } from "lucide-react"
 import { getVersion } from "@tauri-apps/api/app"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { usePrinter } from "@/contexts/printer-context"
+import { toast } from "sonner"
 
 export default function ConfiguracaoPage() {
   const {
@@ -27,6 +28,7 @@ export default function ConfiguracaoPage() {
 
   const [version, setVersion] = useState<string>("")
   const [debugInfo, setDebugInfo] = useState<string>("")
+  const [localSelectedPrinter, setLocalSelectedPrinter] = useState<string>("")
 
   useEffect(() => {
     const loadVersion = async () => {
@@ -39,11 +41,26 @@ export default function ConfiguracaoPage() {
     }
 
     loadVersion()
-  }, [])
+
+    // Atualizar o estado local quando o selectedPrinter do contexto mudar
+    if (selectedPrinter) {
+      setLocalSelectedPrinter(selectedPrinter)
+      setDebugInfo(`Impressora atual: ${selectedPrinter}`)
+    }
+  }, [selectedPrinter])
 
   const handlePrinterChange = (value: string) => {
+    setLocalSelectedPrinter(value)
     setSelectedPrinter(value)
     setDebugInfo(`Impressora selecionada: ${value}`)
+
+    // Mostrar toast de confirmação
+    toast.success("Impressora selecionada", {
+      description: `${value} definida como impressora padrão`,
+    })
+
+    // Salvar imediatamente a seleção
+    localStorage.setItem("selectedPrinter", value)
   }
 
   const handleTestPrint = async () => {
@@ -104,7 +121,7 @@ export default function ConfiguracaoPage() {
             <CardDescription>Selecione a impressora que deseja usar</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Select value={selectedPrinter} onValueChange={handlePrinterChange}>
+            <Select value={localSelectedPrinter} onValueChange={handlePrinterChange}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Selecione uma impressora" />
               </SelectTrigger>
@@ -121,18 +138,29 @@ export default function ConfiguracaoPage() {
             <div className="flex items-center justify-between p-3 bg-muted rounded-md">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium">Status:</span>
-                <span className={`text-sm font-medium ${selectedPrinter ? "text-green-500" : "text-destructive"}`}>
-                  {selectedPrinter ? "Impressora Conectada" : "Nenhuma Impressora Selecionada"}
+                <span className={`text-sm font-medium ${localSelectedPrinter ? "text-green-500" : "text-destructive"}`}>
+                  {localSelectedPrinter ? "Impressora Conectada" : "Nenhuma Impressora Selecionada"}
                 </span>
               </div>
-              {selectedPrinter && (
+              {localSelectedPrinter && (
                 <div className="flex items-center gap-2">
                   <div className="h-2 w-2 rounded-full bg-green-500"></div>
-                  <span className="text-xs text-muted-foreground">Usando: {selectedPrinter}</span>
+                  <span className="text-xs text-muted-foreground">Usando: {localSelectedPrinter}</span>
                 </div>
               )}
             </div>
           </CardContent>
+          {/* <CardFooter>
+            <Button
+              onClick={() => saveConfig()}
+              disabled={!localSelectedPrinter}
+              className="w-full"
+              variant="secondary"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Salvar Impressora Selecionada
+            </Button>
+          </CardFooter> */}
         </Card>
       ) : (
         <Card>
@@ -234,7 +262,7 @@ export default function ConfiguracaoPage() {
 
               <Button
                 onClick={handleSaveConfig}
-                disabled={loading || printers.length === 0 || !selectedPrinter}
+                disabled={loading || printers.length === 0 || !localSelectedPrinter}
                 className="w-full"
               >
                 {loading ? "Salvando..." : "Atualizar Configurações de Impressão"}
@@ -254,7 +282,11 @@ export default function ConfiguracaoPage() {
               <CardDescription>Imprima uma etiqueta de teste para verificar as configurações</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Button onClick={handleTestPrint} disabled={printers.length === 0 || !selectedPrinter} className="w-full">
+              <Button
+                onClick={handleTestPrint}
+                disabled={printers.length === 0 || !localSelectedPrinter}
+                className="w-full"
+              >
                 <Printer className="mr-2 h-4 w-4" />
                 Imprimir Teste
               </Button>
@@ -275,4 +307,3 @@ export default function ConfiguracaoPage() {
     </div>
   )
 }
-
