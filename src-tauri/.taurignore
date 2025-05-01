@@ -1,0 +1,5 @@
+products.db
+products.db.backup
+*.db
+*.db-journal
+*.db.backup
