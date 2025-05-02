@@ -47,7 +47,7 @@ export default function HomePage() {
                 Selecione produtos e imprima etiquetas com códigos de barras
               </p>
               <Button variant={isHovered ? "default" : "outline"} className="mt-2">
-                Acessar Sistema <ArrowRight className="ml-2 h-5 w-5" />
+                Ir para Impressão<ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </CardContent>
           </Card>
