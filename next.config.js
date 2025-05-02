@@ -1,12 +1,15 @@
 /** @type {import('next').NextConfig} */
+const repoName = 'SistemaDeImpressaoDeEtiquetas';
+
 const nextConfig = {
   output: 'export',
-    distDir: 'out',
-    basePath: process.env.NODE_ENV === 'production' ? '/SistemaDeImpressaoDeEtiquetas' : '',
-    assetPrefix: process.env.NODE_ENV === 'production' ? '/SistemaDeImpressaoDeEtiquetas/' : '',
-    images: {
-      unoptimized: true,
-    }
-  }
+  distDir: 'out',
+  basePath: `/${repoName}`,
+  assetPrefix: `/${repoName}/`,
+  trailingSlash: true,
+  images: {
+    unoptimized: true,
+  },
+};
 
-module.exports = nextConfig
+module.exports = nextConfig;

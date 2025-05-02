@@ -3,28 +3,32 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main
+      - main  # Só dispara quando você faz push na branch "main"
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout do repositório
         uses: actions/checkout@v3
 
-      - name: Set up Node.js
+      - name: Instalar Node.js
         uses: actions/setup-node@v3
         with:
           node-version: 18
 
-      - name: Install dependencies
+      - name: Instalar dependências
         run: npm ci
 
-      - name: Build
+      - name: Build e exportar o projeto
         run: npm run build
 
-      - name: Deploy
+      - name: Criar .nojekyll
+        run: echo "" > out/.nojekyll
+
+      - name: Deploy para a branch gh-pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
+          branch: gh-pages
           folder: out
-          branch: gh-pages 
