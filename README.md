@@ -33,7 +33,7 @@ Sistema desktop desenvolvido para a Estrela Metais para impressão de etiquetas 
   - Código de produto personalizado
   - Nome abreviado para etiquetas
   - Busca rápida por código
-  Geração automática de código de barras do tipo EAN-13
+  - Geração automática de código de barras do tipo EAN-13
 
 - 🏷️ **Impressão de Etiquetas**
   - Suporte a impressoras PPLA
@@ -108,6 +108,9 @@ Sistema desktop desenvolvido para a Estrela Metais para impressão de etiquetas 
 Para desenvolver o sistema, você precisará:
 
 ```bash
+# Fazer o Clone do repósitório em sua máquina com git
+https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas.git
+
 # Instalar dependências
 npm install
 
