@@ -40,6 +40,32 @@ interface SelectedProduct extends Product {
   quantity: number | string;
 }
 
+// Funções utilitárias para normalização de códigos
+function normalizeProductCode(input: string): string {
+  // Remove espaços e caracteres não numéricos
+  const numericOnly = input.replace(/\D/g, '');
+  
+  // Se estiver vazio, retorna string vazia
+  if (!numericOnly) return '';
+  
+  // Converte para número e depois para string com 3 dígitos com zeros à esquerda
+  const number = parseInt(numericOnly, 10);
+  return number.toString().padStart(3, '0');
+}
+
+function matchesProductCode(productCode: string, searchTerm: string): boolean {
+  if (!searchTerm.trim()) return true;
+  
+  // Normaliza o termo de busca (ex: "26" vira "026")
+  const normalizedSearch = normalizeProductCode(searchTerm);
+  
+  // Verifica correspondência exata
+  if (productCode === normalizedSearch) return true;
+  
+  // Verifica se o código do produto contém o termo normalizado
+  return productCode.includes(normalizedSearch);
+}
+
 // Função utilitária para cálculos
 function calculateProductStats(selectedProducts: { [key: number]: SelectedProduct }) {
   const uniqueProductsCount = Object.keys(selectedProducts).length;
@@ -222,50 +248,23 @@ export default function ImpressaoPage() {
       [productId]: { ...prev[productId], quantity: newValue },
     }));
   };
-  // Adicione esta função ao seu componente (antes do return)
-  // Adicione esta função antes do return
-const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  if (e.key === 'Enter') {
-    // Procura um produto que corresponda exatamente ao código digitado
-    const exactMatch = products.find(
-      product => product.product_code.toLowerCase() === searchTerm.toLowerCase()
-    );
-    
-    // Se encontrar uma correspondência exata
-    if (exactMatch) {
-      const productId = exactMatch.id!;
+
+  // Função atualizada para lidar com busca normalizada
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      // Normaliza o termo de busca
+      const normalizedSearch = normalizeProductCode(searchTerm);
       
-      // Seleciona o produto se ainda não estiver selecionado
-      if (!selectedProducts[productId]) {
-        toggleProductSelection(exactMatch);
-        updateQuantity(productId, 1);
-      }
-      
-      // Define o produto ativo e limpa o campo de busca
-      setActiveProductId(productId);
-      setSearchTerm('');
-      
-      // Ativa o modo de edição de quantidade
-      setQuantityEditMode(true);
-      
-      // Foca no campo de quantidade após um pequeno delay
-      setTimeout(() => {
-        if (quantityInputRefs.current[productId]) {
-          quantityInputRefs.current[productId].focus();
-          quantityInputRefs.current[productId].select();
-        }
-      }, 50);
-    } else {
-      // Se não encontrar correspondência exata, procura por correspondência parcial
-      const partialMatch = products.find(
-        product => product.product_code.toLowerCase().includes(searchTerm.toLowerCase())
+      // Procura correspondência exata primeiro
+      const exactMatch = products.find(
+        product => product.product_code === normalizedSearch
       );
       
-      if (partialMatch) {
-        const productId = partialMatch.id!;
+      if (exactMatch) {
+        const productId = exactMatch.id!;
         
         if (!selectedProducts[productId]) {
-          toggleProductSelection(partialMatch);
+          toggleProductSelection(exactMatch);
           updateQuantity(productId, 1);
         }
         
@@ -280,16 +279,40 @@ const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
           }
         }, 50);
       } else {
-        // Se não encontrar nenhuma correspondência
-        toast.error("Produto não encontrado", {
-          description: `Nenhum produto com o código "${searchTerm}" foi encontrado.`,
-        });
+        // Se não encontrar correspondência exata, procura por correspondência parcial
+        const partialMatch = products.find(
+          product => matchesProductCode(product.product_code, searchTerm)
+        );
+        
+        if (partialMatch) {
+          const productId = partialMatch.id!;
+          
+          if (!selectedProducts[productId]) {
+            toggleProductSelection(partialMatch);
+            updateQuantity(productId, 1);
+          }
+          
+          setActiveProductId(productId);
+          setSearchTerm('');
+          setQuantityEditMode(true);
+          
+          setTimeout(() => {
+            if (quantityInputRefs.current[productId]) {
+              quantityInputRefs.current[productId].focus();
+              quantityInputRefs.current[productId].select();
+            }
+          }, 50);
+        } else {
+          // Mostra o código normalizado na mensagem de erro
+          toast.error("Produto não encontrado", {
+            description: `Nenhum produto com o código "${normalizedSearch}" foi encontrado.`,
+          });
+        }
       }
     }
-  }
-};
+  };
   
-  // Adicione esta função para lidar com o Enter no campo de quantidade
+  // Função para lidar com o Enter no campo de quantidade
   const handleQuantityKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, productId: number) => {
     if (e.key === 'Enter') {
       // Garante que o valor final seja pelo menos 1
@@ -309,30 +332,25 @@ const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     }
   };
 
-
-  // Filtragem de produtos
-  // Primeiro filtra os produtos com base no termo de busca
-const filteredProducts = products.filter(
-  (product) => {
-    // Se estiver em modo de edição de quantidade, mostrar apenas o produto ativo
+  // Filtragem de produtos atualizada com busca normalizada
+  const filteredProducts = products.filter((product) => {
     if (quantityEditMode && activeProductId !== null) {
       return product.id === activeProductId;
     }
     
-    // Caso contrário, aplicar o filtro normal por código do produto
-    return product.product_code.toLowerCase().includes(searchTerm.toLowerCase());
-  }
-);
+    // Usar a nova função de correspondência normalizada
+    return matchesProductCode(product.product_code, searchTerm);
+  });
 
-// Depois ordena os produtos filtrados, colocando os selecionados no topo
-const sortedFilteredProducts = [...filteredProducts].sort((a, b) => {
-  const isASelected = !!selectedProducts[a.id!];
-  const isBSelected = !!selectedProducts[b.id!];
-  
-  if (isASelected && !isBSelected) return -1; // A está selecionado, B não -> A vem primeiro
-  if (!isASelected && isBSelected) return 1;  // B está selecionado, A não -> B vem primeiro
-  return 0; // Mantém a ordem original se ambos estão selecionados ou ambos não estão
-});
+  // Depois ordena os produtos filtrados, colocando os selecionados no topo
+  const sortedFilteredProducts = [...filteredProducts].sort((a, b) => {
+    const isASelected = !!selectedProducts[a.id!];
+    const isBSelected = !!selectedProducts[b.id!];
+    
+    if (isASelected && !isBSelected) return -1; // A está selecionado, B não -> A vem primeiro
+    if (!isASelected && isBSelected) return 1;  // B está selecionado, A não -> B vem primeiro
+    return 0; // Mantém a ordem original se ambos estão selecionados ou ambos não estão
+  });
 
   const lastSelectedIndex = sortedFilteredProducts.findIndex(product => !selectedProducts[product.id!]) - 1;
 
@@ -508,7 +526,7 @@ const sortedFilteredProducts = [...filteredProducts].sort((a, b) => {
                 {sortedFilteredProducts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      Nenhum produto encontrado
+                      {searchTerm ? `Nenhum produto encontrado para "${normalizeProductCode(searchTerm)}"` : 'Nenhum produto encontrado'}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -527,7 +545,9 @@ const sortedFilteredProducts = [...filteredProducts].sort((a, b) => {
                             onCheckedChange={() => toggleProductSelection(product)}
                           />
                         </TableCell>
-                        <TableCell>{product.product_code}</TableCell>
+                        <TableCell>
+                          <span className="font-mono">{product.product_code}</span>
+                        </TableCell>
                         <TableCell>{product.barcode}</TableCell>
                         <TableCell>{product.name}</TableCell>
                         <TableCell>
@@ -583,4 +603,3 @@ const sortedFilteredProducts = [...filteredProducts].sort((a, b) => {
     </div>
   )
 }
-
