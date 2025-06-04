@@ -53,14 +53,32 @@ function normalizeProductCode(input: string): string {
   return number.toString().padStart(3, '0');
 }
 
+// Função para formatar código para exibição (remove zero à esquerda para códigos 010-099)
+function formatProductCodeForDisplay(productCode: string): string {
+  const number = parseInt(productCode, 10);
+  // Para números de 10 a 99, remove o zero à esquerda
+  if (number >= 10 && number <= 99) {
+    return number.toString();
+  }
+  // Para outros números (001-009, 100+), mantém o formato original
+  return productCode;
+}
+
 function matchesProductCode(productCode: string, searchTerm: string): boolean {
   if (!searchTerm.trim()) return true;
   
   // Normaliza o termo de busca (ex: "26" vira "026")
   const normalizedSearch = normalizeProductCode(searchTerm);
   
-  // Verifica correspondência exata
+  // Verifica correspondência exata com o código normalizado
   if (productCode === normalizedSearch) return true;
+  
+  // Também verifica correspondência com o formato de exibição
+  const displayFormat = formatProductCodeForDisplay(productCode);
+  const searchNumber = parseInt(searchTerm.replace(/\D/g, ''), 10);
+  const displayNumber = parseInt(displayFormat, 10);
+  
+  if (searchNumber === displayNumber) return true;
   
   // Verifica se o código do produto contém o termo normalizado
   return productCode.includes(normalizedSearch);
@@ -98,6 +116,8 @@ export default function ImpressaoPage() {
   const [selectedRows, setSelectedRows] = useState<number[]>([])
   const [productMap, setProductMap] = useState<Map<number, Product>>(new Map())
   const [printing, setPrinting] = useState(false)
+  const [enterPressCount, setEnterPressCount] = useState(0)
+  const [enterPressTimer, setEnterPressTimer] = useState<NodeJS.Timeout | null>(null)
 
   // Calcula estatísticas
   const { uniqueProductsCount, totalEtiquetas } = calculateProductStats(selectedProducts)
@@ -158,6 +178,15 @@ export default function ImpressaoPage() {
 
     initializePage()
   }, [loadProducts, loadPrintHistory])
+
+  // Cleanup do timer quando o componente for desmontado
+  useEffect(() => {
+    return () => {
+      if (enterPressTimer) {
+        clearTimeout(enterPressTimer);
+      }
+    };
+  }, [enterPressTimer])
 
   // Funções de manipulação
   const handlePrintSelected = async () => {
@@ -232,6 +261,19 @@ export default function ImpressaoPage() {
       const newSelection = { ...prev }
       if (newSelection[product.id!]) {
         delete newSelection[product.id!]
+        
+        // Se estamos removendo o produto ativo, limpa o estado ativo
+        if (activeProductId === product.id) {
+          setActiveProductId(null)
+          setQuantityEditMode(false)
+          
+          // Retorna o foco para o campo de busca após remover
+          setTimeout(() => {
+            if (searchInputRef.current) {
+              searchInputRef.current.focus()
+            }
+          }, 50)
+        }
       } else {
         newSelection[product.id!] = { ...product, quantity: 1 }
       }
@@ -252,45 +294,69 @@ export default function ImpressaoPage() {
   // Função atualizada para lidar com busca normalizada
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
-      // Normaliza o termo de busca
-      const normalizedSearch = normalizeProductCode(searchTerm);
-      
-      // Procura correspondência exata primeiro
-      const exactMatch = products.find(
-        product => product.product_code === normalizedSearch
-      );
-      
-      if (exactMatch) {
-        const productId = exactMatch.id!;
-        
-        if (!selectedProducts[productId]) {
-          toggleProductSelection(exactMatch);
-          updateQuantity(productId, 1);
+      // Se não há termo de busca E há produtos selecionados, verifica duplo Enter
+      if (!searchTerm.trim() && hasSelectedProducts) {
+        // Limpa o timer anterior se existir
+        if (enterPressTimer) {
+          clearTimeout(enterPressTimer);
         }
         
-        setActiveProductId(productId);
-        setSearchTerm('');
-        setQuantityEditMode(true);
+        const newCount = enterPressCount + 1;
+        setEnterPressCount(newCount);
         
-        setTimeout(() => {
-          if (quantityInputRefs.current[productId]) {
-            quantityInputRefs.current[productId].focus();
-            quantityInputRefs.current[productId].select();
+        if (newCount === 1) {
+          // Primeiro Enter - mostra feedback e inicia timer
+          toast.info("Pressione Enter novamente para imprimir", {
+            description: "Pressione Enter mais uma vez para confirmar a impressão",
+            duration: 2000,
+          });
+          
+          // Define timer para resetar contador após 2 segundos
+          const timer = setTimeout(() => {
+            setEnterPressCount(0);
+            setEnterPressTimer(null);
+          }, 2000);
+          
+          setEnterPressTimer(timer);
+        } else if (newCount >= 2) {
+          // Segundo Enter - executa impressão
+          setEnterPressCount(0);
+          setEnterPressTimer(null);
+          if (enterPressTimer) {
+            clearTimeout(enterPressTimer);
           }
-        }, 50);
-      } else {
-        // Se não encontrar correspondência exata, procura por correspondência parcial
-        const partialMatch = products.find(
-          product => matchesProductCode(product.product_code, searchTerm)
+          handlePrintSelected();
+        }
+        return;
+      }
+      
+      // Reset contador se há termo de busca (comportamento normal de busca)
+      if (searchTerm.trim()) {
+        setEnterPressCount(0);
+        if (enterPressTimer) {
+          clearTimeout(enterPressTimer);
+          setEnterPressTimer(null);
+        }
+      }
+      
+      // Se há termo de busca, procura o produto
+      if (searchTerm.trim()) {
+        // Normaliza o termo de busca
+        const normalizedSearch = normalizeProductCode(searchTerm);
+        
+        // Procura correspondência exata primeiro
+        const exactMatch = products.find(
+          product => product.product_code === normalizedSearch
         );
         
-        if (partialMatch) {
-          const productId = partialMatch.id!;
+        if (exactMatch) {
+          const productId = exactMatch.id!;
           
+          // Sempre adiciona/atualiza o produto selecionado
           if (!selectedProducts[productId]) {
-            toggleProductSelection(partialMatch);
-            updateQuantity(productId, 1);
+            toggleProductSelection(exactMatch);
           }
+          updateQuantity(productId, selectedProducts[productId]?.quantity || 1);
           
           setActiveProductId(productId);
           setSearchTerm('');
@@ -303,10 +369,39 @@ export default function ImpressaoPage() {
             }
           }, 50);
         } else {
-          // Mostra o código normalizado na mensagem de erro
-          toast.error("Produto não encontrado", {
-            description: `Nenhum produto com o código "${normalizedSearch}" foi encontrado.`,
-          });
+          // Se não encontrar correspondência exata, procura por correspondência parcial
+          const partialMatch = products.find(
+            product => matchesProductCode(product.product_code, searchTerm)
+          );
+          
+          if (partialMatch) {
+            const productId = partialMatch.id!;
+            
+            // Sempre adiciona/atualiza o produto selecionado
+            if (!selectedProducts[productId]) {
+              toggleProductSelection(partialMatch);
+            }
+            updateQuantity(productId, selectedProducts[productId]?.quantity || 1);
+            
+            setActiveProductId(productId);
+            setSearchTerm('');
+            setQuantityEditMode(true);
+            
+            setTimeout(() => {
+              if (quantityInputRefs.current[productId]) {
+                quantityInputRefs.current[productId].focus();
+                quantityInputRefs.current[productId].select();
+              }
+            }, 50);
+          } else {
+            // Mostra o código no formato de exibição na mensagem de erro
+            const displayCode = searchTerm.replace(/\D/g, '') ? 
+              formatProductCodeForDisplay(normalizeProductCode(searchTerm)) : 
+              searchTerm;
+            toast.error("Produto não encontrado", {
+              description: `Nenhum produto com o código "${displayCode}" foi encontrado.`,
+            });
+          }
         }
       }
     }
@@ -332,27 +427,60 @@ export default function ImpressaoPage() {
     }
   };
 
-  // Filtragem de produtos atualizada com busca normalizada
+  // Filtragem de produtos corrigida
   const filteredProducts = products.filter((product) => {
+    // Se está no modo de edição de quantidade, mostra apenas o produto ativo
     if (quantityEditMode && activeProductId !== null) {
       return product.id === activeProductId;
     }
     
-    // Usar a nova função de correspondência normalizada
-    return matchesProductCode(product.product_code, searchTerm);
+    // Verifica se está selecionado
+    const isSelected = !!selectedProducts[product.id!];
+    
+    // Se há busca ativa
+    if (searchTerm.trim()) {
+      const matchesSearch = matchesProductCode(product.product_code, searchTerm);
+      
+      // Mostra produtos selecionados OU produtos que correspondem à busca
+      return isSelected || matchesSearch;
+    }
+    
+    // Se não há busca, mostra apenas produtos selecionados
+    return isSelected;
   });
 
-  // Depois ordena os produtos filtrados, colocando os selecionados no topo
+  // Ordena os produtos: primeiro o que está sendo buscado, depois selecionados, depois outros
   const sortedFilteredProducts = [...filteredProducts].sort((a, b) => {
     const isASelected = !!selectedProducts[a.id!];
     const isBSelected = !!selectedProducts[b.id!];
     
-    if (isASelected && !isBSelected) return -1; // A está selecionado, B não -> A vem primeiro
-    if (!isASelected && isBSelected) return 1;  // B está selecionado, A não -> B vem primeiro
-    return 0; // Mantém a ordem original se ambos estão selecionados ou ambos não estão
+    // Se há termo de busca, prioriza correspondências exatas
+    if (searchTerm.trim()) {
+      const normalizedSearch = normalizeProductCode(searchTerm);
+      const aExactMatch = a.product_code === normalizedSearch;
+      const bExactMatch = b.product_code === normalizedSearch;
+      
+      // Correspondência exata vem primeiro
+      if (aExactMatch && !bExactMatch) return -1;
+      if (!aExactMatch && bExactMatch) return 1;
+      
+      // Se ambos são correspondência exata ou nenhum é, verifica correspondência parcial
+      if (aExactMatch === bExactMatch) {
+        const aPartialMatch = matchesProductCode(a.product_code, searchTerm);
+        const bPartialMatch = matchesProductCode(b.product_code, searchTerm);
+        
+        // Produtos que correspondem à busca vem antes dos selecionados quando há busca ativa
+        if (aPartialMatch && !bPartialMatch) return -1;
+        if (!aPartialMatch && bPartialMatch) return 1;
+      }
+    }
+    
+    // Depois ordena por seleção
+    if (isASelected && !isBSelected) return -1;
+    if (!isASelected && isBSelected) return 1;
+    
+    return 0;
   });
-
-  const lastSelectedIndex = sortedFilteredProducts.findIndex(product => !selectedProducts[product.id!]) - 1;
 
   const printSelectedProducts = async () => {
     if (!selectedPrinter) {
@@ -484,11 +612,14 @@ export default function ImpressaoPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             ref={searchInputRef}
-            placeholder="Buscar por código do produto..."
+            placeholder={hasSelectedProducts ? 
+              "Digite o código do produto para buscar ou aperte Enter DUAS VEZES para imprimir selecionados" : 
+              "Digite o código do produto para buscar e aperte Enter para selecionar."
+            }
             className="pl-8 focus:ring-2 focus:ring-amber-400  focus-visible:ring-amber-400 focus-visible:ring-2"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyDown={handleSearchKeyDown} // Adicione o evento de tecla aqui
+            onKeyDown={handleSearchKeyDown}
             autoFocus
           />
         </div>
@@ -496,7 +627,7 @@ export default function ImpressaoPage() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>Produtos</CardTitle>
+              <CardTitle>Produtos Selecionados</CardTitle>
               {hasSelectedProducts && (
                 <Button
                   variant="ghost"
@@ -505,7 +636,7 @@ export default function ImpressaoPage() {
                   className="h-7 px-2 flex items-center gap-2 border border-input hover:border-accent rounded-md transition-colors"
                 >
                   <CheckSquare className="h-4 w-4" />
-                  Desmarcar Todos
+                  Remover Todos
                 </Button>
               )}
             </div>
@@ -519,78 +650,64 @@ export default function ImpressaoPage() {
                   <TableHead>Codigo de Barras</TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Quantidade de Etiquetas</TableHead>
-                  <TableHead className="text-right">Selecionar</TableHead>
+                  <TableHead className="text-right">Remover</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {sortedFilteredProducts.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      {searchTerm ? `Nenhum produto encontrado para "${normalizeProductCode(searchTerm)}"` : 'Nenhum produto encontrado'}
+                      {searchTerm 
+                        ? `Após digitar o código do produto, presione Enter ` 
+                        : 'Nenhum produto selecionado. Use o campo de busca para adicionar produtos.'
+                      }
                     </TableCell>
                   </TableRow>
                 ) : (
-                  sortedFilteredProducts.map((product, index) => (
-                    <React.Fragment key={product.id}>
-                      <TableRow 
-                        className={`
-                          ${selectedProducts[product.id!] ? "bg-primary/10 hover:bg-primary/15" : ""}
-                          table-row-enter table-row-enter-active table-row-move
-                        `}
-                        
-                      >
-                        <TableCell>
-                          <Checkbox
-                            checked={!!selectedProducts[product.id!]}
-                            onCheckedChange={() => toggleProductSelection(product)}
+                  sortedFilteredProducts.map((product) => (
+                    <TableRow 
+                      key={product.id}
+                      className={`
+                        ${selectedProducts[product.id!] ? "bg-primary/10 hover:bg-primary/15" : ""}
+                        table-row-enter table-row-enter-active table-row-move
+                      `}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={!!selectedProducts[product.id!]}
+                          onCheckedChange={() => toggleProductSelection(product)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-mono">{formatProductCodeForDisplay(product.product_code)}</span>
+                      </TableCell>
+                      <TableCell>{product.barcode}</TableCell>
+                      <TableCell>{product.name}</TableCell>
+                      <TableCell>
+                        {selectedProducts[product.id!] && (
+                          <Input
+                          type="number"
+                          min="0"
+                          value={selectedProducts[product.id!].quantity}
+                          onChange={(e) => updateQuantity(product.id!, e.target.value)}
+                          className={`w-20 ${activeProductId === product.id ? 'ring-2 ring-primary' : ''} focus:ring-2 focus:ring-amber-400  focus-visible:ring-amber-400`}
+                          ref={(el) => {
+                            if (el) quantityInputRefs.current[product.id!] = el;
+                          }}
+                          onKeyDown={(e) => handleQuantityKeyDown(e, product.id!)}
                           />
-                        </TableCell>
-                        <TableCell>
-                          <span className="font-mono">{product.product_code}</span>
-                        </TableCell>
-                        <TableCell>{product.barcode}</TableCell>
-                        <TableCell>{product.name}</TableCell>
-                        <TableCell>
-                          {selectedProducts[product.id!] && (
-                            <Input
-                            type="number"
-                            min="0"
-                            value={selectedProducts[product.id!].quantity}
-                            onChange={(e) => updateQuantity(product.id!, e.target.value)}
-                            className={`w-20 ${activeProductId === product.id ? 'ring-2 ring-primary' : ''} focus:ring-2 focus:ring-amber-400  focus-visible:ring-amber-400`}
-                            ref={(el) => {
-                              if (el) quantityInputRefs.current[product.id!] = el;
-                            }}
-                            onKeyDown={(e) => handleQuantityKeyDown(e, product.id!)}
-                            />
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => {
-                              toggleProductSelection(product)
-                              if (!selectedProducts[product.id!]) {
-                                updateQuantity(product.id!, 1)
-                              }
-                            }}
-                          >
-                            <Plus className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                      
-                      {/* Adiciona a linha divisória após o último produto selecionado */}
-                      {index === lastSelectedIndex && lastSelectedIndex >= 0 && (
-                        <TableRow>
-                          <TableCell 
-                            colSpan={6} 
-                            className="p-0 h-[4px] bg-primary/50"
-                          />
-                        </TableRow>
-                      )}
-                    </React.Fragment>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => toggleProductSelection(product)}
+                        >
+                          <Plus className="h-4 w-4 rotate-45" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
                   ))
                 )}
               </TableBody>

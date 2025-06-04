@@ -27,16 +27,77 @@ interface Product {
   name_short: string
 }
 
+// Funções utilitárias para normalização de códigos
+function normalizeProductCode(input: string): string {
+  // Remove espaços e caracteres não numéricos
+  const numericOnly = input.replace(/\D/g, '');
+  
+  // Se estiver vazio, retorna string vazia
+  if (!numericOnly) return '';
+  
+  // Converte para número e depois para string com 3 dígitos com zeros à esquerda
+  const number = parseInt(numericOnly, 10);
+  return number.toString().padStart(3, '0');
+}
+
+// Função para formatar código para exibição (remove zero à esquerda para códigos 010-099)
+function formatProductCodeForDisplay(productCode: string): string {
+  const number = parseInt(productCode, 10);
+  // Para números de 10 a 99, remove o zero à esquerda
+  if (number >= 10 && number <= 99) {
+    return number.toString();
+  }
+  // Para outros números (001-009, 100+), mantém o formato original
+  return productCode;
+}
+
+function matchesProductCode(productCode: string, searchTerm: string): boolean {
+  if (!searchTerm.trim()) return true;
+  
+  // Normaliza o termo de busca (ex: "26" vira "026")
+  const normalizedSearch = normalizeProductCode(searchTerm);
+  
+  // Verifica correspondência exata com o código normalizado
+  if (productCode === normalizedSearch) return true;
+  
+  // Também verifica correspondência com o formato de exibição
+  const displayFormat = formatProductCodeForDisplay(productCode);
+  const searchNumber = parseInt(searchTerm.replace(/\D/g, ''), 10);
+  const displayNumber = parseInt(displayFormat, 10);
+  
+  if (searchNumber === displayNumber) return true;
+  
+  // Verifica se o código do produto contém o termo normalizado
+  return productCode.includes(normalizedSearch);
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [productToDelete, setProductToDelete] = useState<number | null>(null)
+  const [editingProductId, setEditingProductId] = useState<number | null>(null)
 
   useEffect(() => {
     loadProducts()
   }, [])
+
+  // Effect para simular clique no botão de edição quando editingProductId for definido
+  useEffect(() => {
+    if (editingProductId !== null) {
+      // Usar setTimeout para garantir que o DOM foi renderizado
+      const timer = setTimeout(() => {
+        const editButton = document.querySelector(`[data-product-id="${editingProductId}"] button[data-edit-button]`);
+        if (editButton) {
+          (editButton as HTMLButtonElement).click();
+          setEditingProductId(null); // Reset após clique
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [editingProductId]);
 
   const loadProducts = async () => {
     try {
@@ -75,10 +136,87 @@ export default function ProductsPage() {
     }
   }
 
-  const filteredProducts = products.filter(
-    (product) =>
-      product.product_code.toLowerCase().includes(searchTerm.toLowerCase())
-  )
+  const handleEditClose = () => {
+    setEditingProductId(null);
+  }
+
+  // Aplicando a mesma lógica de filtro do primeiro arquivo com correspondência exata
+  const filteredProducts = products.filter((product) => {
+    // Se não há busca, mostra todos os produtos
+    if (!searchTerm.trim()) return true;
+    
+    // Normaliza o termo de busca
+    const normalizedSearch = normalizeProductCode(searchTerm);
+    
+    // Para códigos de produto, busca apenas correspondência exata
+    const exactCodeMatch = product.product_code === normalizedSearch;
+    
+    // Para outros campos, mantém a busca parcial
+    const matchesName = product.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesShortName = product.name_short.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesBarcode = product.barcode.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Se o termo de busca parece ser um código (só números), prioriza correspondência exata no código
+    const isNumericSearch = /^\d+$/.test(searchTerm.trim());
+    if (isNumericSearch) {
+      return exactCodeMatch;
+    }
+    
+    // Para busca não numérica, inclui todos os campos
+    return exactCodeMatch || matchesName || matchesShortName || matchesBarcode;
+  });
+
+  // Função para lidar com Enter na busca
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      // Normaliza o termo de busca
+      const normalizedSearch = normalizeProductCode(searchTerm);
+      
+      // Procura correspondência exata no código
+      const exactMatch = products.find(
+        product => product.product_code === normalizedSearch
+      );
+      
+      if (exactMatch) {
+        // Encontrou correspondência exata - entra em modo de edição
+        setEditingProductId(exactMatch.id);
+        setSearchTerm(''); // Limpa a busca
+      } else {
+        // Se não encontrar correspondência exata, mostra mensagem
+        const displayCode = searchTerm.replace(/\D/g, '') ? 
+          formatProductCodeForDisplay(normalizedSearch) : 
+          searchTerm;
+        toast.error("Produto não encontrado", {
+          description: `Nenhum produto com o código "${displayCode}" foi encontrado.`,
+        });
+      }
+    }
+  };
+
+  // Ordena os produtos: primeiro correspondências exatas, depois outras
+  const sortedFilteredProducts = [...filteredProducts].sort((a, b) => {
+    if (!searchTerm.trim()) return 0; // Se não há busca, mantém ordem original
+    
+    const normalizedSearch = normalizeProductCode(searchTerm);
+    const aExactMatch = a.product_code === normalizedSearch;
+    const bExactMatch = b.product_code === normalizedSearch;
+    
+    // Correspondência exata no código vem primeiro
+    if (aExactMatch && !bExactMatch) return -1;
+    if (!aExactMatch && bExactMatch) return 1;
+    
+    // Se ambos são correspondência exata ou nenhum é, verifica correspondência parcial
+    if (aExactMatch === bExactMatch) {
+      const aPartialMatch = matchesProductCode(a.product_code, searchTerm);
+      const bPartialMatch = matchesProductCode(b.product_code, searchTerm);
+      
+      // Produtos que correspondem ao código vem antes
+      if (aPartialMatch && !bPartialMatch) return -1;
+      if (!aPartialMatch && bPartialMatch) return 1;
+    }
+    
+    return 0;
+  });
 
   if (loading) {
     return (
@@ -108,10 +246,11 @@ export default function ProductsPage() {
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Buscar por código do produto"
-            className="pl-8"
+            placeholder="Digite o código do produto para buscar e aperte Enter para editar."
+            className="pl-8 focus:ring-2 focus:ring-amber-400 focus-visible:ring-amber-400 focus-visible:ring-2"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
           />
         </div>
       </div>
@@ -128,10 +267,12 @@ export default function ProductsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredProducts.length > 0 ? (
-              filteredProducts.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell className="font-medium">{product.product_code}</TableCell>
+            {sortedFilteredProducts.length > 0 ? (
+              sortedFilteredProducts.map((product) => (
+                <TableRow key={product.id} data-product-id={product.id}>
+                  <TableCell className="font-medium">
+                    <span className="font-mono">{formatProductCodeForDisplay(product.product_code)}</span>
+                  </TableCell>
                   <TableCell className="font-mono">{product.barcode}</TableCell>
                   <TableCell>{product.name}</TableCell>
                   <TableCell>{product.name_short}</TableCell>
@@ -139,9 +280,12 @@ export default function ProductsPage() {
                     <div className="flex items-center gap-2">
                       <ProductForm
                         productId={product.id}
-                        onSubmitSuccess={loadProducts}
+                        onSubmitSuccess={() => {
+                          loadProducts();
+                          handleEditClose();
+                        }}
                         trigger={
-                          <Button variant="ghost" size="sm">
+                          <Button variant="ghost" size="sm" data-edit-button>
                             <Pencil className="h-4 w-4" />
                           </Button>
                         }
