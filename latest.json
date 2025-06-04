@@ -1,11 +1,11 @@
 {
-  "version": "1.1.1",
-  "notes": "Correção de pesistencia de escolha de impressora e modo em tela maximizada de modo padrão ao iniciar o sistema.",
+  "version": "1.1.2",
+  "notes": "melhorias de ux e normalização de codigos de produto nas paginas de impresão e de produtos.",
   "pub_date": "2024-04-28T10:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTakdGdjZ3R1F1dXFSdWJSUzloOENyTld6OHFRUWt1ZDFtNFhzd1paZXRUT1cvM2ZmNThNdmp6SS94ckRIRGVTQjJvYWxob2xiM3dZUHRENlhBdWRPQ1dpYTd2SFg0TXc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQ1OTUxOTQyCWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4xLjFfeDY0LXNldHVwLm5zaXMuemlwCmRZd1UvNGZxVkFjUWxsQk9jaHgzRnI0QVBEUXZyUmhmRmtMTVg0WHpwZjFTUmJXakJDQkNBTEVXQnRaN1FUaEtlOGc2MXZqQS81aTlOU2hXNG5SWkRRPT0K",
-      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.1.1/Sistema.de.Etiquetas_1.1.1_x64-setup.nsis.zip"
+      "signature": "ddW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTVjhPREpHUVlLRXRnZXZjS3hES2w2WXhheHlZUjVpREVxeUlzVm1vSmF4MWdlamVwQXc2bFhQa0EwMXdMb3k3SlpFMTI3eXJid0N6Ry9HYkZ0a045ZU5aT0VGUnZJTGdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQ5MDU5NjY2CWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4xLjJfeDY0LXNldHVwLm5zaXMuemlwCmplZVVIRGREMkk5blhlNHc4ZjJoV0ZObStmZ3VvRHAybEJITFB3R2N3bFlJOGo4V1dKTHRCdjlEbENCWm0vV0VrOEdxcDFnSnZCNzZ3STZCNTlic0NnPT0K",
+      "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.1.2/Sistema.de.Etiquetas_1.1.1_x64-setup.nsis.zip"
     }
   }
 }
