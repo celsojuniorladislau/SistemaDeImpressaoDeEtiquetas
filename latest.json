@@ -4,7 +4,7 @@
   "pub_date": "2024-04-28T10:00:00Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTVjhPREpHUVlLRWphcy9GQi9hRCtiNytJVmpIL1FwWmF6UHBUdHFhQys4WS8xQ2RreTd3WFU2Q2plWWZZS21UWnhkT292djlZWFEwYnVsd3p4L2FBanZCSjBwYzM4cndBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQ5MTQwMjM5CWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4xLjJfeDY0LXNldHVwLm5zaXMuemlwCjFrelhycHVKWXhPcFU3ek9RZXk4TEkxdVhUVFJjUW5pcW1tY3lZT0IvdlRtMVdFaHZnUmRjOTRZSFJWeXRnVVRvWnRqZjlLeEowNzcvRFY5M0xsakR3PT0K",
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTVjhPREpHUVlLRXNuWkRBaVdxTDV5SE1wRUt2VVQrVVh1dmpoYSt2OVoxZm1HZUJ6SGlFZzArWnk3aEhYSlQ4MVBoT3dXVGwwYTZGY04rRnpyZFVpZk5iNUdIVWM0aVE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzQ5MTQxMjkzCWZpbGU6U2lzdGVtYS5kZS5FdGlxdWV0YXNfMS4xLjNfeDY0LXNldHVwLm5zaXMuemlwCkpKZ2d6c3BIdGRTbTh6ZFplRTRNOGZaTTFYdVFRM2FZUU90aW8zNXQwbFJxMEtCcW5maFBpOXBuUGpvV2x2NHBCdU9Mdzd0SHN0K0kyejNzNU0vMEN3PT0K",
       "url": "https://github.com/celsojuniorladislau/SistemaDeImpressaoDeEtiquetas/releases/download/v1.1.3/Sistema.de.Etiquetas_1.1.1_x64-setup.nsis.zip"
     }
   }
