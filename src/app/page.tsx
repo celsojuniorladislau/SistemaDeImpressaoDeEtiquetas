@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -15,6 +15,23 @@ export default function HomePage() {
   const navigateToImpressao = () => {
     router.push("/impressao")
   }
+
+  // Effect para escutar a tecla Enter
+  useEffect(() => {
+    const handleKeyPress = (event: KeyboardEvent) => {
+      if (event.key === "Enter") {
+        navigateToImpressao()
+      }
+    }
+
+    // Adiciona o event listener
+    window.addEventListener("keydown", handleKeyPress)
+
+    // Remove o event listener quando o componente for desmontado
+    return () => {
+      window.removeEventListener("keydown", handleKeyPress)
+    }
+  }, [])
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-background to-muted/30">
@@ -53,7 +70,12 @@ export default function HomePage() {
           </Card>
         </motion.div>
 
-        
+        {/* Dica visual para o usuário */}
+        <div className="text-center mt-6">
+          <p className="text-sm text-muted-foreground">
+            Pressione <kbd className="px-2 py-1 text-xs font-semibold text-gray-800 bg-gray-100 border border-gray-200 rounded-lg">Enter</kbd> para acessar
+          </p>
+        </div>
       </div>
     </div>
   )
